@@ -14,10 +14,10 @@ CoastalWQ_20200831.csv
 
 VARIABLE NAME		DESCRIPTION
 
-"Site_Visnum_Layer" 	Concatenated unique sample identifier
-"UID"			Identifier
-"SITE_ID"           	Site name or identifier
-"VISNUM               	Visit number (1 or 2)
+Site_Visnum_Layer 	Concatenated unique sample identifier
+UID			Identifier
+SITE_ID           	Site name or identifier
+VISNUM               	Visit number (1 or 2)
 Col_Date          	Sample collection date
 Col_loc          	Sample collection location (i.e., surface)
 Latitude          	Latitude of site
