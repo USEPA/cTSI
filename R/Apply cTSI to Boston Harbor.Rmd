@@ -1,0 +1,729 @@
+---
+title: "Apply cTSI to Escambia Bay"
+author: "J. Hagy"
+date: "January 25, 2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#install.packages("ggmap")
+
+library(tidyverse)
+library(gridExtra)
+library(lubridate)
+library(caret)
+library(sf)
+library(maps)
+library(ggmap)
+library(mapview)
+library(leaflet)
+library(RColorBrewer)
+library(qgam)
+select <- dplyr::select
+
+source("functions/coastal_tsi_functions.R")
+
+
+```
+
+## Read Boston Harbor Data
+Data downloaded from: https://www.mwra.com/harbor/html/wq_data.htm
+
+```{r}
+
+includeStations <- c(24,38,106,124,138,139,140,141,142)
+
+bh_station_locations <- read.csv("boston_harbor_sampling_data_locations.csv",
+                                 stringsAsFactors = FALSE) %>% 
+  rename(Station.ID=STAT_ID,
+         Latitude=TARGET_LAT,
+         Longitude=TARGET_LON) %>% 
+  mutate(Station.ID=as.numeric(Station.ID)) %>% 
+  filter(Station.ID %in% includeStations,
+         STUDY_ID=="BHWQM") %>% 
+  st_as_sf(., coords = c('Longitude', 'Latitude'), crs = 4326) %>% 
+  mutate(type="Nutrients")
+
+
+# note: stations with letters in them aren't needed, so doesn't matter that they can't be coerced 
+# to numeric.
+
+```
+
+# Make a map of the Boston Harbor stations
+
+```{r}
+
+pal <- colorFactor(
+  palette = brewer.pal(3,"Set2"),
+  domain = bh_station_locations$type)
+
+m  <-  leaflet(bh_station_locations, height = 350*1, width = 350*1, options = leafletOptions(zoomControl = FALSE)) %>% 
+  addProviderTiles("CartoDB.PositronNoLabels") %>%
+  setView(-70.95, 42.3, zoom = 11) %>%
+  addCircleMarkers(weight=2,radius=6,opacity=1,
+                   label = ~Station.ID, 
+                   labelOptions = labelOptions(noHide = TRUE, offset=c(18,18), 
+                      textOnly = TRUE, direction = "top", 
+                      style = list("color" = "black","font-weight" = "bold",
+                                   "font-size" = "9px"))) %>% 
+  addScaleBar("bottomleft") %>%
+  addMiniMap(
+    tiles = providers$CartoDB.PositronNoLabels,
+    position = "topright",
+    centerFixed=c(40,-72),
+    width = 80, height = 110, zoomLevelOffset = -7,
+    toggleDisplay = FALSE)
+m
+#m
+
+mapshot(m, file = "Stations.jpg", vheight=350, vwidth=350, zoom=3, remove_controls = FALSE)
+
+# Note:  needed to install PhantomJS to make this work, as below
+#PhantomJS not found. You can install it with webshot::install_phantomjs(). If it is installed, #please make sure the phantomjs executable can be found via the PATH variable.
+#> webshot::install_phantomjs()
+#trying URL 'https://github.com/wch/webshot/releases/download/v0.3.1/phantomjs-2.1.1-windows.zip#'
+#Content type 'application/octet-stream' length 18193653 bytes (17.4 MB)
+#downloaded 17.4 MB
+#phantomjs has been installed to C:\Users\jhagy\AppData\Roaming\PhantomJS
+
+#bh_shorelines <- st_read("C:/Users/jhagy/OneDrive - Environmental Protection Agency #(EPA)/jim/GIS/bostonharbor/High Water Shorelines (1800s-2009)/
+
+```
+# Make a map using ggmap
+```{r}
+
+bh_station_locations <- read.csv("boston_harbor_sampling_data_locations.csv",
+                                 stringsAsFactors = FALSE) %>% 
+  rename(Station.ID=STAT_ID,
+         Latitude=TARGET_LAT,
+         Longitude=TARGET_LON) %>% 
+  mutate(Station.ID=as.numeric(Station.ID)) %>% 
+  filter(Station.ID %in% includeStations,
+         STUDY_ID=="BHWQM")
+
+bh_bbox <- make_bbox(lat = Latitude, lon=Longitude,data=bh_station_locations)
+
+names(bh_bbox) <- c("left","bottom","right","top")
+
+bh_map <- get_map(location = bh_bbox, maptype = "watercolor", source = "stamen",zoom=12)
+ggmap(bh_map) +
+  geom_point(data=bh_station_locations,mapping = aes(x=Longitude,y=Latitude),color="red",shape=18,size=4) +
+  
+```
+# Read the Boston Harbor Nutrients data
+
+```{r}
+bh_nutrients <- read.csv("C:/Users/jhagy/OneDrive - Environmental Protection Agency (EPA)/jim/Kreakie Collaborations/Boston Harbor/bh_nutrients.csv",skip=4) %>% 
+  filter(Surface.or.Bottom=="S") %>% 
+  mutate(TimeStamp=as.POSIXct(Date.time..EASTERN.STANDARD.TIME.,format="%m/%d/%y %H:%M",tz="Etc/GMT-5"))
+         
+# Select columns by number
+keepCols <- c(2,3,4,5,33,8,9,10,11,12,13,14,15,16,19,20,21,22,23,24,25,26,29,30)
+bh_nutrients <- bh_nutrients[,keepCols]
+# Rename variables - all concentrations are uM, depth in meters
+names(bh_nutrients) <- c("Region,","Subregion","DEP.segment","Station.ID","TimeStamp","Sample.Depth","NH4","NH4.Flag","NOx","NOx.Flag","TDN","TDN.Flag","PN","PN.Flag","PO4","PO4.Flag","TDP",
+  "TDP.Flag","PP","PP.Flag","TP","TP.Flag","Chla","Chla.Flag")
+
+# Calculate DIN,TN and TP
+bh_nutrients <- bh_nutrients %>% mutate(DIN.mgL=(NOx+NH4)*14.007/1000,
+                                        DIP.mgL=PO4*31/1000,
+                                        TN.mgL=(TDN+PN)*14.007/1000,
+                                        TP.mgL=(TDP+PP)*31/1000
+                                        )
+
+bh_nutrients$DIN.Flag <- ""
+bh_nutrients$DIN.Flag[bh_nutrients$NOx.Flag=="<" | bh_nutrients$NH4.Flag=="<"] <- "<"
+```
+
+# Evaluate frequency of non-detects in the data
+
+```{r}
+
+# Evaluate frequency of non-detects
+tmp <- bh_nutrients %>% 
+  filter(between(month(TimeStamp),6,9)) %>% 
+  select(NOx.Flag,NH4.Flag,DIN.Flag,PO4.Flag,TDN.Flag,
+         PN.Flag,PO4.Flag,TDP.Flag,PP.Flag) %>% 
+  pivot_longer(cols=everything(),names_to="parameter",values_to="value")
+tmp$value[tmp$value==""] <- ">"
+
+tmp <- tmp %>% 
+  group_by(parameter,value) %>% 
+  summarize(n=n(),.groups="keep") %>% 
+  pivot_wider(id_cols=c("parameter","value"),names_from="value",values_from="n",
+              values_fill=0)
+
+names(tmp) <- c("parameter","LTMDL","GTMDL")
+tmp <- tmp %>% mutate(percentND = 100*LTMDL/(LTMDL+GTMDL))
+
+# Graph it
+
+bh_nutrients %>% 
+  filter(between(month(TimeStamp),6,9)) %>% 
+  ggplot(aes(x=TimeStamp,y=NOx,color=factor(NOx.Flag)))+
+  geom_point()+
+  scale_y_log10()
+
+bh_nutrients %>% 
+  filter(between(month(TimeStamp),6,9)) %>% 
+  ggplot(aes(x=TimeStamp,y=NH4,color=factor(NH4.Flag)))+
+  geom_point()+
+  scale_y_log10()
+
+bh_nutrients %>% 
+  filter(between(month(TimeStamp),6,9)) %>% 
+  ggplot(aes(x=TimeStamp,y=PO4,color=factor(PO4.Flag)))+
+  geom_point()+
+  scale_y_log10()
+
+bh_nutrients %>% 
+  filter(between(month(TimeStamp),6,9)) %>% 
+  ggplot(aes(x=TimeStamp,y=DIN.mgL,color=factor(DIN.Flag)))+
+  geom_point()+
+  scale_y_log10()
+
+```
+# Read the Clarity Data
+```{r}
+
+# Read the Boston Harbor Water Clarity Data
+bh_clarity <- read.csv("C:/Users/jhagy/OneDrive - Environmental Protection Agency (EPA)/jim/Kreakie Collaborations/Boston Harbor/bh_secchi.csv",skip=5) %>% 
+  filter(Surface.or.Bottom=="S") %>% 
+  mutate(TimeStamp=as.POSIXct(Date.time..EASTERN.STANDARD.TIME.,format="%m/%d/%Y %H:%M",tz="Etc/GMT-5"))
+
+keepCols <- c(1,2,3,4,5,14,7,12)
+bh_clarity <- bh_clarity[,keepCols]
+names(bh_clarity)[c(7,8)] <- c("TotalDepth.m","Secchi.Depth.m")
+
+```
+
+# Graph the summer data
+
+```{r}
+
+# Join nutrients and secchi data, keeping only data needed for POLR
+bh_polr <- inner_join(
+  bh_clarity %>% dplyr::select(Station.ID,TimeStamp,Secchi.Depth.m),
+  bh_nutrients %>% dplyr::select(Station.ID,TimeStamp,DIN.mgL,DIP.mgL,TN.mgL,TP.mgL,Chla),
+  by=c("Station.ID","TimeStamp"))
+
+
+tmp <- bh_polr %>% filter(Station.ID %in% c(138,140)) %>% 
+  filter(between(month(TimeStamp),6,8)) %>% 
+  mutate(year=year(TimeStamp),
+         Station.ID=factor(Station.ID))
+
+# Summer TN appears to be decreasing at both stations since the mid 1990s, more quickly at Neponset
+ggplot(tmp,aes(x=year,y=TN.mgL,color=Station.ID))+
+  geom_point()+
+  geom_smooth(method="lm")+
+  ggtitle("Summer Total Nitrogen in Boston Harbor") +
+  labs(y="mg N/L") +
+  scale_y_log10()
+
+# Summer DIN appears to be decreasing at both stations since the mid 1990s 
+ggplot(tmp,aes(x=year,y=DIN.mgL,color=Station.ID))+
+  geom_point()+
+  geom_smooth(method="lm")+
+  ggtitle("Summer Dissolved Inorganic Nitrogen in Boston Harbor") +
+  labs(y="mg N/L") +
+  scale_y_log10()
+
+# Summer Chla appears to have decreased around 2000 - including the variability of Chla, 
+# and then slowly increased thereafter but wioth less variability.  
+ggplot(tmp,aes(x=year,y=Chla,color=Station.ID))+
+  geom_point()+
+  geom_smooth(method="loess")+
+  scale_y_log10()+
+  ggtitle("Summer Chl-a in Boston Harbor") +
+  labs(y="µg/L")
+
+tmp %>% group_by(Station.ID,year) %>% 
+  summarize(p90=quantile(Chla,probs=0.9,na.rm=TRUE)) %>% 
+  ggplot(aes(x=year,y=p90))+
+  facet_grid(Station.ID~.)+
+  geom_point()+
+  geom_smooth(method="loess")+
+  labs(x="Year",y="90th Percentile Chla µg/L")+
+  ggtitle("Summer Chlorophyll-a Blooms in Boston Harbor Area")
+
+summary(tmp)
+
+```
+
+# Select data to process for TSI calculation
+
+Processing station 140, near Neponset River mouth (Dorchester) and station 138 (Inner Harbor/New England Aquarium)
+https://www.mwra.com/harbor/graphic/harboronly_sampling_locations.png
+
+```{r}
+
+nut.variables <- c("NH4","NOx","TDN","PN","TDP","PP","PO4","Chla")
+nut.flags <- c("NH4.Flag","NOx.Flag","TDN.Flag","PN.Flag","TDP.Flag","PP.Flag","PO4.Flag")
+
+bh_polr <- inner_join(
+  bh_clarity %>% dplyr::select(Station.ID,TimeStamp,Secchi.Depth.m),
+  bh_nutrients %>% 
+    dplyr::select(Station.ID,TimeStamp,all_of(nut.variables),all_of(nut.flags)),
+  by=c("Station.ID","TimeStamp"))
+
+# Establish upper and lower bounds for variables
+bh_polr$NH4.upper <- bh_polr$NH4
+bh_polr$NH4.lower[bh_polr$NH4.Flag=="<"] <- 0
+bh_polr$NH4.lower[bh_polr$NH4.Flag==""] <- bh_polr$NH4[bh_polr$NH4.Flag==""]
+
+bh_polr$NOx.upper <- bh_polr$NOx
+bh_polr$NOx.lower[bh_polr$NOx.Flag=="<"] <- 0
+bh_polr$NOx.lower[bh_polr$NOx.Flag==""] <- bh_polr$NOx[bh_polr$NOx.Flag==""]
+
+bh_polr$TDN.upper <- bh_polr$TDN
+bh_polr$TDN.lower[bh_polr$TDN.Flag=="<"] <- 0
+bh_polr$TDN.lower[bh_polr$TDN.Flag==""] <- bh_polr$TDN[bh_polr$TDN.Flag==""]
+
+bh_polr$PN.upper <- bh_polr$PN
+bh_polr$PN.lower[bh_polr$PN.Flag=="<"] <- 0
+bh_polr$PN.lower[bh_polr$PN.Flag==""] <- bh_polr$PN[bh_polr$PN.Flag==""]
+
+bh_polr$PO4.upper <- bh_polr$PO4
+bh_polr$PO4.lower[bh_polr$PO4.Flag=="<"] <- 0
+bh_polr$PO4.lower[bh_polr$PO4.Flag==""] <- bh_polr$PO4[bh_polr$PO4.Flag==""]
+
+bh_polr$TDP.upper <- bh_polr$TDP
+bh_polr$TDP.lower[bh_polr$TDP.Flag=="<"] <- 0
+bh_polr$TDP.lower[bh_polr$TDP.Flag==""] <- bh_polr$TDP[bh_polr$TDP.Flag==""]
+
+bh_polr$PP.upper <- bh_polr$PP
+bh_polr$PP.lower[bh_polr$PP.Flag=="<"] <- 0
+bh_polr$PP.lower[bh_polr$PP.Flag==""] <- bh_polr$PP[bh_polr$PP.Flag==""]
+
+for (i in seq(1,nrow(bh_polr))) {
+  bh_polr$NH4.sample[i] <- runif(1,min=bh_polr$NH4.lower[i],max=bh_polr$NH4.upper[i])
+  bh_polr$NOx.sample[i] <- runif(1,min=bh_polr$NOx.lower[i],max=bh_polr$NOx.upper[i])
+  bh_polr$TDN.sample[i] <- runif(1,min=bh_polr$TDN.lower[i],max=bh_polr$TDN.upper[i])
+  bh_polr$PN.sample[i] <- runif(1,min=bh_polr$PN.lower[i],max=bh_polr$PN.upper[i])
+  bh_polr$PO4.sample[i] <- runif(1,min=bh_polr$PO4.lower[i],max=bh_polr$PO4.upper[i])
+  bh_polr$TDP.sample[i] <- runif(1,min=bh_polr$TDP.lower[i],max=bh_polr$TDP.upper[i])
+  bh_polr$PP.sample[i] <- runif(1,min=bh_polr$PP.lower[i],max=bh_polr$PP.upper[i])
+    }
+
+# Calculate variables that are calculated from reported values
+bh_polr <- bh_polr %>% mutate(
+  DIN=(NH4.sample+NOx.sample)*14.007/1000,
+  TN=(TDN.sample+PN.sample)*14.007/1000,
+  TP=(TDP.sample+PP.sample)*31/1000,
+  DIP=PO4.sample*31/1000,
+  DIN.Flag="",
+  DIP.Flag="",
+  TN.Flag="",
+  TP.Flag="")
+
+# If either of the components of a sum are below reporting limit, flag the sum.
+
+bh_polr$DIN.Flag[bh_polr$NH4.Flag=="<" | bh_polr$NOx.Flag=="<"] <- "<"
+bh_polr$DIP.Flag[bh_polr$PO4.Flag=="<" ] <- "<"
+bh_polr$TN.Flag[bh_polr$TDN.Flag=="<" | bh_polr$PN.Flag=="<"] <- "<"
+bh_polr$TP.Flag[bh_polr$TDP.Flag=="<" | bh_polr$PP.Flag=="<"] <- "<"
+
+# Retain only the POLR variables and associated flags
+polr.variables <- c("TN","TP","DIN","DIP","Secchi.Depth.m","Chla")
+polr.flags <- c("TN.Flag","TP.Flag","DIN.Flag","DIP.Flag")
+bh_polr <- bh_polr %>% 
+  select(Station.ID,TimeStamp,all_of(polr.variables),all_of(polr.flags))
+
+save(bh_polr,file="Boston_POLR_Data.Rdata")
+
+```
+
+# Graph the POLR variables
+
+```{r}
+
+tmp <- bh_polr %>% filter(Station.ID %in% c(138,140)) %>% 
+  filter(between(month(TimeStamp),6,9)) 
+
+tmp1 <- tmp %>% 
+  select(Station.ID,TimeStamp,TN,TP,DIN,DIP) %>% 
+  pivot_longer(
+    cols = c("TN","TP","DIN","DIP"),
+    names_to = "Param"
+  )
+
+tmp2 <- tmp %>% 
+  select(Station.ID,TimeStamp,TN.Flag,TP.Flag,DIN.Flag,DIP.Flag) %>% 
+  pivot_longer(
+    cols = c("TN.Flag","TP.Flag","DIN.Flag","DIP.Flag"),
+    names_to = "Param"
+  ) %>% rename(Flag=value)
+tmp3 <- tmp %>% 
+  select(Station.ID,TimeStamp,Chla,Secchi.Depth.m) %>% 
+  pivot_longer(
+    cols = c("Secchi.Depth.m","Chla"),
+    names_to = "Param"
+  ) %>% 
+  mutate(Flag="")
+
+tmp <- cbind(tmp1,Flag=tmp2$Flag) %>% 
+  rbind(tmp3) %>% 
+  mutate(Flag=factor(Flag,levels=c("","<"),labels=c("none","< reporting limit")),
+         Param=factor(Param,
+                      levels=c("Chla","Secchi.Depth.m","TN","TP","DIN","DIP"),
+                      labels=c("Chla (µg/L)","Secchi Depth (m)","TN (mg-N/L)",
+                      "TP (mg-P/L)","DIN (mg-N/L)","DIP (mg-P/L)")))
+
+rm(list=c("tmp1","tmp2","tmp3"))
+
+plt <- ggplot(tmp,aes(x=TimeStamp,y=value,color=Flag))+
+  facet_wrap(~Param,scales="free_y",ncol=2)+
+  geom_point()+
+  scale_y_log10()+
+  labs(x="",y="")+
+  theme(legend.position="top",legend.title=element_blank(),
+        panel.grid=element_blank())
+
+pdf(file="Boston_Harbor_TS.pdf",useDingbats = FALSE,paper="letter",width=7,height=9)
+  plt
+dev.off()
+png(file="Boston_Harbor_TS.png",width=6,height=6,units="in",res=150)
+  plt
+dev.off()
+
+tmp <- bh_polr %>% filter(Station.ID %in% c(138,140)) %>% 
+  filter(between(month(TimeStamp),6,8)) %>% 
+  mutate(year=year(TimeStamp),
+         Station.ID=factor(Station.ID))
+
+rm(tmp)
+
+```
+
+## Calculate TSI and trophic state probability
+
+```{r}
+
+load("Bayesian_POLR_2015update.(5-10-20).Rdata")
+load("Bayesian_POLR_2010.(5-10-20).Rdata")
+load("centeringParameters.Rdata")
+load("Boston_POLR_Data.Rdata")
+
+bh <- bh_polr %>% 
+#  filter(Station.ID %in% c(138,140)) %>%
+  filter(between(month(TimeStamp),6,9)) %>% 
+  select(Station.ID,TimeStamp,TN,TP,DIN,DIP,Secchi.Depth.m,Chla) %>% 
+  mutate(levelIII="NORTHEASTERN COASTAL ZONE") %>% 
+  mutate(levelIII=factor(levelIII,levels=levelIIIregions))  # region variable must be a factor
+
+bh <- bh[complete.cases(bh),]
+
+# rename variables to match expected names
+names(bh) <- c("Station.ID","TimeStamp","TN..mgN.L.","TP..mgP.L.","DIN..mgN.L.","DIP..mgP.L.","SECCHI_MEAN..m.","CHLA..ug.L.","levelIII")
+
+Breaks_Chla_Q <- c(0,5,10,20,Inf)
+
+# Define ordinal Chl-a class variable using quantile-based breaks
+bh <- mutate(bh,TS_Chla_Q=cut(CHLA..ug.L., 
+                                        breaks=Breaks_Chla_Q, 
+                                        labels=c("Oligo", "Meso", "Eu", "Hyper")))
+
+# Boston Harbor stations have chl-a that is oligo- to meso-trophic most of the time.
+bh %>% group_by(TS_Chla_Q) %>% summarize(n=n()) %>% .[,2] / nrow(bh)
+
+
+Alpha <- build_coefficient_matrix(Coeff.Summary.update.L3Eco)
+regionMatrix <- build_region_matrix(bh,"levelIII")
+centerParameters(bh,centeringParameters)
+X <- cbind(SDD.C, TN.C, TP.C, DIN.C, DIP.C, regionMatrix)
+TSI <- X %*% Alpha[,"mean"]
+bh$TSI <- TSI
+
+# Graph frequency histograms of 
+bh$Station.Group[bh$Station.ID==138] <- "Inner Harbor"
+bh$Station.Group[bh$Station.ID!=138] <- "Other Locations"
+
+bh %>% mutate(era = cut(year(TimeStamp),breaks=c(1990,2000,2005,2010,2015,2021),
+                        labels=c("1995-2000","2000-2005","2005-2010","2010-2015","2015-2020"))
+              ) %>% 
+  ggplot(aes(x=TSI))+
+  geom_histogram(binwidth = 50,fill="lightblue")+
+  facet_grid(era ~ .,scales="free_y")+
+  scale_x_continuous(limits=c(-300,250),breaks=seq(-250,250,by=100))+
+  labs(x="Trophic State Index",y="Frequency")+
+  geom_vline(xintercept=Coeff.Summary.update.L3Eco[1:3,"mean"],linetype="dotted")+
+  theme_classic()+
+  theme(legend.position="top",strip.background = element_blank())
+
+ggplot(bh,aes(x=year(TimeStamp),y=TSI,color=TS_Chla_Q))+
+  geom_point()+
+  scale_y_continuous(limits=c(-300,250),breaks=seq(-300,250,by=100))+
+  scale_x_continuous(breaks=c(1995,2000,2005,2010,2015,2020))+
+  labs(y="Trophic State Index",x="")+
+  geom_hline(yintercept=Coeff.Summary.update.L3Eco[1:3,"mean"],linetype=2)+
+  theme_classic()
+
+
+tmp <- calculate_ts_probabilities(Coeff.Summary.update.L3Eco,bh$TSI)
+
+bh <- cbind(bh,tmp)
+save(bh,file="BostonHarborTSI.Rdata")
+write.csv(bh,file="BH_TSI.csv",row.names=FALSE)
+```
+
+# Evaluate agreement between TSI and Chla
+
+```{r}
+
+load("BostonHarborTSI.Rdata")
+
+regionEval <- build_region_matrix(bh,"levelIII")
+Pred.CatAll <- findPredictedClass.TSI(bh,Coeff.Summary.update.L3Eco)
+
+CM.TS.Multilevel <- confusionMatrix(Pred.CatAll,bh$TS_Chla_Q)
+CM.TS.Multilevel
+
+
+# Classify Observations
+cut_pts <- Coeff.Summary.update.L3Eco[1:3,"mean"]
+bh <- bh %>% mutate(TS_Predicted=cut(TSI,breaks=c(-Inf,cut_pts,Inf),labels=levels(bh$TS_Chla_Q)))
+
+bh %>% filter(TS_Chla_Q=="Oligo" & TS_Chla_Q != TS_Predicted) %>% .[,13:16] %>% summary()
+
+tmp <- bh %>% 
+  select(year,pMesotrophic,pOligotrophic,pEutrophic,pHypereutrophic) %>% 
+  pivot_longer(cols=starts_with("p"),names_to="ProbName",values_to="Prob") %>% 
+  mutate(ProbName=factor(ProbName,levels=c("pOligotrophic","pMesotrophic","pEutrophic","pHypereutrophic"),
+         labels=c("Oligotrophic","Mesotrophic","Eutrophic","Hypereutrophic")))
+
+
+ggplot(tmp,aes(x=year,y=Prob))+
+  facet_wrap(ProbName ~ .,ncol=2)+
+  geom_point()+
+  geom_smooth()+
+  scale_x_continuous(breaks=seq(1995,2015,by=5))
+  
+```
+
+# Examine How TSI changed in Boston Harbor and compare with how Chl-a changed 
+
+Change in TSI reflects "macroscope" prediction of hos chl-a would be expected to change, whereas change in Chlorophyll-a reflects observed change.  
+
+```{r}
+ggplot(bh,aes(x=year,y=TSI))+
+  geom_point()+
+  geom_smooth()
+
+install.packages("quantreg")
+library("quantreg")
+
+# Model year trend in median TSI
+fit1 <- rq(TSI ~ year, tau = .5, data = bh)
+
+# Model year trend in median TSI
+fit2 <- rq(TSI ~ year, tau = .9, data = bh)
+fit2
+
+ggplot(bh,aes(x=year,y=TSI))+
+  geom_point()+
+  geom_abline(aes(slope=fit2$coefficients[2],intercept=fit2$coefficients[1]))
+
+ggplot(bh,aes(x=year,y=CHLA..ug.L.))+
+  geom_point()+
+  scale_y_log10()
+
+```
+
+Fit a QGAM through summer Chl-a data in Boston Harbor
+
+```{r}
+
+fit90 <- qgam(CHLA..ug.L. ~ s(year,k=10,bs="ad"),
+            data=bh,
+            qu=0.9)
+fit50 <- qgam(CHLA..ug.L. ~ s(year,k=10,bs="ad"),
+            data=bh,
+            qu=0.5)
+fit10 <- qgam(CHLA..ug.L. ~ s(year,k=10,bs="ad"),
+            data=bh,
+            qu=0.1)
+
+xSeq <- data.frame(year=seq(1995,2020))
+pred90 <- predict(fit90,newdata=xSeq,se=TRUE)
+pred50 <- predict(fit50,newdata=xSeq,se=TRUE)
+pred10 <- predict(fit10,newdata=xSeq,se=TRUE)
+
+tmp <- data.frame(year=xSeq$year,
+                  q90=pred90$fit,
+                  se90=pred90$se.fit,
+                  q50=pred50$fit,
+                  se50=pred50$se.fit,
+                  q10=pred10$fit,
+                  se10=pred10$se.fit) %>% 
+                  mutate(year=as.POSIXct(paste0(as.character(year),"-07-01"),format="%Y-%m-%d"))
+
+
+pal <- brewer.pal(4,"Set2")
+chla_Qgam_plt <- ggplot()+
+     geom_point(data=bh,aes(x=TimeStamp,y=CHLA..ug.L.),shape=1,size=2,color="grey")+
+     geom_ribbon(data=tmp,aes(x=year,ymin=q90-se90,ymax=q90+se90),fill=pal[1])+
+     geom_line(data=tmp,aes(x=year,y=q90))+
+     geom_ribbon(data=tmp,aes(x=year,ymin=q50-se50,ymax=q50+se50),fill=pal[2])+
+     geom_line(data=tmp,aes(x=year,y=q50))+
+     geom_ribbon(data=tmp,aes(x=year,ymin=q10-se10,ymax=q10+se10),fill=pal[3])+
+     geom_line(data=tmp,aes(x=year,y=q10))+
+     #theme_classic()+
+     scale_x_datetime(breaks="5 years",date_labels="%Y")+
+     scale_y_log10(breaks=c(3,5,10,20,30))+
+     labs(x="",y="µg L-1")
+chla_Qgam_plt  
+
+pdf(file="QGAM figure.pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
+  chla_Qgam_plt  
+dev.off()
+```
+
+Fit a QGAM through TSI data in Boston Harbor
+
+```{r}
+bh$year <- year(bh$TimeStamp)
+
+fit90 <- qgam(TSI ~ s(year,k=10,bs="ad"),
+            data=bh,
+            qu=0.9)
+fit50 <- qgam(TSI ~ s(year,k=10,bs="ad"),
+            data=bh,
+            qu=0.5)
+fit10 <- qgam(TSI ~ s(year,k=10,bs="ad"),
+            data=bh,
+            qu=0.1)
+
+xSeq <- data.frame(year=seq(1995,2020))
+pred90 <- predict(fit90,newdata=xSeq,se=TRUE)
+pred50 <- predict(fit50,newdata=xSeq,se=TRUE)
+pred10 <- predict(fit10,newdata=xSeq,se=TRUE)
+
+tmp <- data.frame(year=xSeq$year,
+                  q90=pred90$fit,
+                  se90=pred90$se.fit,
+                  q50=pred50$fit,
+                  se50=pred50$se.fit,
+                  q10=pred10$fit,
+                  se10=pred10$se.fit) %>% 
+                  mutate(year=as.POSIXct(paste0(as.character(year),"-07-01"),format="%Y-%m-%d"))
+
+
+pal <- brewer.pal(4,"Set2")
+TSI_Qgam_plt <- ggplot()+
+     geom_point(data=bh,aes(x=TimeStamp,y=TSI),shape=1,size=2,color="grey")+
+     geom_ribbon(data=tmp,aes(x=year,ymin=q90-se90,ymax=q90+se90),fill=pal[1])+
+     geom_line(data=tmp,aes(x=year,y=q90))+
+     geom_ribbon(data=tmp,aes(x=year,ymin=q50-se50,ymax=q50+se50),fill=pal[2])+
+     geom_line(data=tmp,aes(x=year,y=q50))+
+     geom_ribbon(data=tmp,aes(x=year,ymin=q10-se10,ymax=q10+se10),fill=pal[3])+
+     geom_line(data=tmp,aes(x=year,y=q10))+
+     #theme_classic()+
+     scale_x_datetime(breaks="5 years",date_labels="%Y")+
+     scale_y_continuous(limits=c(-300,200),breaks=seq(-300,200,by=50))+
+     labs(x="",y="Trophic State Index")
+
+
+pdf(file="QGAM TSI figure.pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
+  TSI_Qgam_plt
+dev.off()
+```
+
+# Q-Q plots
+```{r}
+load("coastalTSI.Rdata")
+load("BostonHarborTSI.Rdata")
+load("Bayesian_POLR_2015update.(5-10-20).Rdata")
+
+library("wesanderson")
+probs <- seq(0.05,0.95,by=0.05)
+
+q.NCCA.TSI <- quantile(coastalTSI$TSI,probs=probs)
+q.NE.TSI <- quantile(coastalTSI$TSI[coastalTSI$levelIII=="NORTHEASTERN COASTAL ZONE"],probs=probs)
+q.BH.TSI <- quantile(bh$TSI,probs=probs)
+pal <- wes_palette("Zissou1", 10, type = "continuous")
+
+data.frame(q.NCCA.TSI,q.BH.TSI,q.NE.TSI,Quantile=probs) %>% 
+  ggplot() +
+  geom_point(aes(x=q.NE.TSI,y=q.BH.TSI,color=Quantile),shape=17)+
+  geom_point(aes(x=q.NCCA.TSI,y=q.BH.TSI,color=Quantile)) +
+  scale_color_gradientn(colours = pal)+
+  scale_x_continuous(limits=c(-400,400))+
+  scale_y_continuous(limits=c(-400,400))+
+  geom_abline(scope=1,intercept=0, linetype=2)+
+  geom_vline(aes(xintercept=Coeff.Summary.update.L3Eco[1,"mean"]),color="grey")+
+  geom_vline(aes(xintercept=Coeff.Summary.update.L3Eco[2,"mean"]),color="grey")+
+  geom_vline(aes(xintercept=Coeff.Summary.update.L3Eco[3,"mean"]),color="grey")+
+  geom_hline(aes(yintercept=Coeff.Summary.update.L3Eco[1,"mean"]),color="grey")+
+  geom_hline(aes(yintercept=Coeff.Summary.update.L3Eco[2,"mean"]),color="grey")+
+  geom_hline(aes(yintercept=Coeff.Summary.update.L3Eco[3,"mean"]),color="grey")+
+  theme_classic()+
+  labs(y="Boston Harbor TSI",x="NCCA or Northeast TSI")
+```
+
+# Q-Q Plot of TSI and Chlorophyll-a by period
+
+```{r}
+yrs <- c(1995,2000)
+q.BH.TSI <- quantile(bh$TSI[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
+q.BH.Chla <- quantile(bh$CHLA..ug.L.[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
+interval <- "1995-2000"
+tmp <- data.frame(q.BH.TSI,q.BH.Chla,Quantile=probs,interval=interval)
+
+yrs <- c(2000,2005)
+q.BH.TSI <- quantile(bh$TSI[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
+q.BH.Chla <- quantile(bh$CHLA..ug.L.[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
+interval <- "2000-2005"
+tmp <- rbind(tmp,data.frame(q.BH.TSI,q.BH.Chla,Quantile=probs,interval=interval))
+
+yrs <- c(2005,2010)
+q.BH.TSI <- quantile(bh$TSI[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
+q.BH.Chla <- quantile(bh$CHLA..ug.L.[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
+interval <- "2005-2010"
+tmp <- rbind(tmp,data.frame(q.BH.TSI,q.BH.Chla,Quantile=probs,interval=interval))
+
+yrs <- c(2010,2015)
+q.BH.TSI <- quantile(bh$TSI[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
+q.BH.Chla <- quantile(bh$CHLA..ug.L.[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
+interval <- "2010-2015"
+tmp <- rbind(tmp,data.frame(q.BH.TSI,q.BH.Chla,Quantile=probs,interval=interval))
+
+yrs <- c(2015,2019)
+q.BH.TSI <- quantile(bh$TSI[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
+q.BH.Chla <- quantile(bh$CHLA..ug.L.[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
+interval <- "2015-2019"
+tmp <- rbind(tmp,data.frame(q.BH.TSI,q.BH.Chla,Quantile=probs,interval=interval))
+
+q.BH.TSI <- quantile(coastalTSI$TSI,probs=probs)
+q.BH.Chla <- quantile(coastalTSI$CHLA..ug.L.,probs=probs)
+interval <- "NCCA"
+tmp <- rbind(tmp,data.frame(q.BH.TSI,q.BH.Chla,Quantile=probs,interval=interval))
+
+pal <- brewer.pal(6,"Set2")
+
+ggplot(tmp,aes(x=q.BH.TSI,y=q.BH.Chla,color=interval))+
+  geom_point()+
+  geom_smooth(se=FALSE)+
+  #scale_y_log10(breaks=c(2.5,5,10,20))+
+  scale_color_manual(values=pal)+
+  #scale_x_continuous(limits=c(-250,50))+
+  geom_vline(aes(xintercept=Coeff.Summary.update.L3Eco[1,"mean"]),color="grey")+
+  #geom_vline(aes(xintercept=Coeff.Summary.update.L3Eco[2,"mean"]),color="grey")+
+  #geom_hline(aes(yintercept=5),color="grey")+
+  #geom_hline(aes(yintercept=10),color="grey")+
+  #geom_hline(aes(yintercept=20),color="grey")+
+  theme_classic()+
+  labs(x="Trophic State Index",y="Chlorophyll-a (µg/L",color="")
+
+
+
+
+```
+
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
