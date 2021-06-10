@@ -5,7 +5,7 @@ cTSI (coastal trophic state index) contains data and code used in development an
 
 ## Overview
 
-The code includes several R markdown files and an associated file containing R functions. The main body of code *coastal_TSI_ts.Rmd* loads the function file located in the functions folder.  Raw data is included as .csv files in the raw directory and various data sets created as intermediate products are in the data folder.
+The code includes several R markdown files and an associated file containing R functions. The main body of code *coastal_TSI_ts.Rmd* loads the function file located in the functions folder.  Raw data is included as .csv files in the raw directory and various data sets created as intermediate products are in the data folder.  Variable definitions are included in a [data dictionary](https://github.com/USEPA/-cTSI/blob/main/data_dictionary.md)
 
 ## Citation
 
