@@ -1,9 +1,6 @@
 ---
 title: "Data Dictionary"
-output: 
-   html_document:
-      toc: true
-      toc_float: true
+output: html_document
 ---
 
 ### Overview
@@ -12,10 +9,10 @@ This document provides metadata for data used in: Hagy, JD, B. Kreakie, M. Pelle
 
 The raw data are in the following comma-delimited text files:
 
-CoastalWQ_20200831.csv<br>
-Secchi2015.csv<br>
-bh_secchi.csv<br>
-bh_nutrients.csv<br>
+[link CoastalWQ_20200831.csv](#coastalwq_20200831csv)<br>
+[link Secchi2015.csv](#Secchi2015.csv)<br>
+[link bh_secchi.csv](#bh_secchi.csv)<br>
+[link bh_nutrients.csv](#bh_nutrients.csv)
 
 
 ### CoastalWQ_20200831.csv
