@@ -1,5 +1,5 @@
 
-# cTSI
+# Coastal Trophic State Index Model (cTSI)
 
 cTSI (coastal trophic state index) contains data and code used in development and application of a Bayesian Proportional Odds Logistic Regression model to classify sites according to water quality variables related to trophic state.
 
