@@ -1,38 +1,54 @@
 ---
 title: "Coastal_TS.Rmd"
 author: "J. Hagy"
-date: "January 22, 2021"
+date: "June 10, 2021"
 output: pdf_document
 ---
 # 1. Setup
 ```{r include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-pkgs <- c("devtools", "randomForest", "dplyr", "rjags", "arm", "xtable","caret","ggplot2","knitr","tibble","tidyverse",
-          "lmodel2")
+# These packages are required and should be installed 
+# if not already installed
 
+## Selected packages and what they are used for
+
+# randomForest  ->  randomForest models
+# rjags -> supports using JAGS for Bayesian models
+# caret  -> used to evaluate classifications, to make confusion matrix
+# lmodel -> used for model 2 regressions
+
+# Install the packages needed if they aren't already installed
+pkgs <- c("tidyverse","devtools", "randomForest","rjags", "arm", "xtable","caret","knitr","tibble","lmodel2")
 cran_no <- pkgs[!pkgs %in% installed.packages()[,1]]
 for(i in cran_no){
   install.packages(i)
 }
 
-lapply(pkgs, library, character.only = T)
+# Library the packages
+lapply(pkgs, library, character.only = T)  
 
+
+# load functions used for this project
 source("functions/coastal_tsi_functions.R")
 
+# MASS package often takes over select function
 # make sure that select is from dplyr
-# MASS package often takes over select function, this returns it to dplyr
 select <- dplyr::select
+
 ```
-# 2. Read in the NCA data
-```{r}
+# 2. Read in the NCA data from csv files
+```{r echo=TRUE}
 
 # Read in from CSV file
-inFile <- "Raw/CoastalWQ_20200831.csv"
-
-# only use data from 2010 and 2015, on the first visit,
-# from surface water.
+inFile <- "raw/CoastalWQ_20200831.csv"
+inSecchi <- "raw/Secchi2015.csv"
+# Only use data from 2010 and 2015, on the first visit,
+#   from surface water.
 # Do not use data from the Great Lakes
+# fixRegions changes variable names and makes them into factors
+# add2015secchi reads data from text file, averages duplicates,
+# and joins the result with the data frame
 coastal <- read.csv(inFile, stringsAsFactors = FALSE) %>% 
   filter(SAMPYEAR==2010 | SAMPYEAR==2015) %>% 
   filter(VISNUM==1, Col_loc=="SURFACE") %>% 
@@ -43,30 +59,19 @@ coastal <- read.csv(inFile, stringsAsFactors = FALSE) %>%
 #Remove rows where any of these variables has a missing value
 coastal <- coastal[complete.cases(coastal[,c("SECCHI_MEAN..m.","DIP..mgP.L.","DIN..mgN.L.","TN..mgN.L.","TP..mgP.L.","CHLA..ug.L.")]),]
 
-write.csv(select(coastal,Latitude,Longitude),file="latlong.csv")
-#https://vdatum.noaa.gov/vdatumweb/#ASCII
-
-# Determine quantile-based Chl-a break points using only 2010 data
-# Breaks_Chla_Q <- coastal %>% 
-#   filter(SAMPYEAR==2010) %>% 
-#   .[,"CHLA..ug.L."] %>% 
-#   quantile(probs = seq(0.25, 0.75, by = 1/4),na.rm=TRUE) %>% 
-#   c(0,.,Inf)
-# Use pre-determined breaks, rather than values based on percentiles of data. 
+# Define ordinal chl-a classes based on ranges of values from literature.
 Breaks_Chla_Q <- c(0,5,10,20,Inf)
-
-# Define ordinal Chl-a class variable using quantile-based breaks
 coastal <- mutate(coastal,TS_Chla_Q=cut(CHLA..ug.L., 
-                                        breaks=Breaks_Chla_Q, 
-                                        labels=c("Oligo", "Meso", "Eu", "Hyper")))
+              breaks=Breaks_Chla_Q, 
+              labels=c("Oligo", "Meso", "Eu", "Hyper")))
 
 # What percentage of non-detects are there for each variable?
 # there is 0 to 2.8% non detects.
 evaluateNonDetects(coastal)
 
-# Replace the non-detects with 2010 NCCA MDL values
-#  there aren't very many non-detects, but replacing with MDL is
-#  not especially appearling.  Replace with unform random variable??
+# Replace the non-detects reported as zero with 2010 NCCA MDL
+#  there are very few non-detects, so we argue that a more 
+# rigorous approach is not required
 coastal[coastal[,"TP..mgP.L."]==0,"TP..mgP.L."] <- 0.0012
 coastal[coastal[,"DIN..mgN.L."]==0,"DIN..mgN.L."] <- 0.001
 coastal[coastal[,"DIP..mgP.L."]==0,"DIP..mgP.L."] <- 0.0027
@@ -76,7 +81,10 @@ nutrientPredictors <- c("TN..mgN.L.","DIN..mgN.L.","TP..mgP.L.","DIP..mgP.L.","D
 regionPredictors <- c("Latitude","Longitude","REGION","SUBREGIONS","levelIII","AggEco","EMAP","BioGeo")
 predictors_coastal <- c(nutrientPredictors,regionPredictors)
 
-#save(coastal,file="coastalTSI_NCAdata_all.Rdata")
+# Save the resulting data as Rdata file if the file hasn't been created already.
+if (!file.exists("data/coastalTSI_NCAdata_all.Rdata")) {
+  save(coastal,file="data/coastalTSI_NCAdata_all.Rdata")
+}
 
 ```
 # 2. Extract the 2010 Data from full data
@@ -101,21 +109,14 @@ tmp <- select(coastal,SAMPYEAR,levelIII,TS_Chla_Q) %>%
               pivot_wider(names_from=c("SAMPYEAR","TS_Chla_Q"),
                           values_from="n",values_fill=0)
 tmp
-write.csv(tmp,file="ObservationsByEcoregionTS.csv")
-# note that there aren't any observations in WALLAMETTE VALLEY in 2015.
+write.csv(tmp,file="outputs/ObservationsByEcoregionTS.csv")
+# note that there are no observations in WALLAMETTE VALLEY in 2015.
 
 ```
 # Prepare descriptive statistics and graphics for data from the two years
 ```{r}
 
-#Box plots are OK, but are less informative than the scatter plots.
-# ggplot(tmp,aes(x=factor(SAMPYEAR),y=CHLA..ug.L.))+
-#   geom_boxplot() +
-#   facet_wrap(~levelIII,ncol=3)+
-#   scale_y_log10() +
-#   theme(strip.text = element_text(size=8),
-#         panel.grid=element_blank())
-
+# Graph the relationship between TN and Log(Chlorophyll-a) by ecoregion
 coastal %>% mutate(Year=factor(SAMPYEAR)) %>% 
 ggplot(.,aes(x=TN..mgN.L.,y=CHLA..ug.L.,color=Year))+
   geom_point() +
@@ -129,8 +130,7 @@ ggplot(.,aes(x=TN..mgN.L.,y=CHLA..ug.L.,color=Year))+
   ggtitle("Chlorophyll-a vs. TN in NARS Coastal Data",subtitle="within Level III Ecoregions")
 
 # Calculate the mean of log-transformed predictor variables in each year
-summary(coastal)
-
+# and save to centeringParameters for later use. 
 tmp <- coastal %>% 
   mutate(logSD=log(SECCHI_MEAN..m.),
          logTN=log(TN..mgN.L.),
@@ -144,36 +144,40 @@ tmp <- coastal %>%
   ungroup() %>% 
   mutate(SAMPYEAR=factor(SAMPYEAR))
 
-
+# graph the centering parameters, showing differences by year
 ggplot(tmp,aes(x=SAMPYEAR,y=mean))+
   geom_col()+
   geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),width=0.25)+
   facet_wrap(~param,scales="free_y")+
   ggtitle("Distribution of WQ varables in 2010 vs. 2015")
 
+# just keep the values for 2010
 centeringParameters <- filter(tmp,SAMPYEAR==2010) %>% select(-SAMPYEAR)
-#save(centeringParameters,file="centeringParameters.Rdata")
+
+# if not saved yet, save to Rdata file
+if(!file.exists("data/centeringParameters.Rdata")) {
+  save(centeringParameters,file="../data/centeringParameters.Rdata")
+}
 
 ```
 # 3. Random Forest for Variable Selection - 2010 data
 Fit Random Forest Models using 2010 data with various possible regionalization variables
 ```{r "RF2010", eval=FALSE, include=FALSE}
 
-# Does not generate any output
-# Clean up using complete cases applied to all variables
-
+# Select the variables to be used for randomForest
 all_coastal <- coastal2010 %>% 
   select(c(predictors_coastal,"CHLA..ug.L.")) %>% 
   mutate(LogCHLA=log10(CHLA..ug.L.)) %>% 
   select(-CHLA..ug.L.)
 
+# keep only the complete cases
 row.names(all_coastal) <- coastal2010$SITE_ID
 all_coastal <- all_coastal[complete.cases(all_coastal),]
 
 # Model: All Variables
 set.seed(42)
 
-all_rf<-randomForest(y=all_coastal$LogCHLA,x=all_coastal[,predictors_coastal]
+rf_all<-randomForest(y=all_coastal$LogCHLA,x=all_coastal[,predictors_coastal]
                      , ntree=10000, importance=TRUE, proximity=TRUE
                      , keep.forest=TRUE,keep.inbag=TRUE)
 
@@ -200,24 +204,38 @@ rf_allGeog <- randomForest(y=all_coastal$LogCHLA,x=all_coastal[,regionPredictors
                      , ntree=10000, importance=TRUE, proximity=TRUE
                      , keep.forest=TRUE,keep.inbag=TRUE)
 
-#save(all_rf,rf_subregion,rf_levelIII,rf_BioGeo,rf_EMAP,rf_AggEco,
-#     rf_LatLon,rf_allGeog,file="RandomForestModels2010.Rdata")
+# if the files have not already been saved, save randomForest models individually 
+# so that the resulting data file is not too large
+#
+# Don't put these files in GitHub ... just too big
+#
+#if(!file.exists("data/rf_all.Rdata")) {
+#   save(rf_all,file="data/rf_all.Rdata")
+#   save(rf_subregion,file="data/rf_subregion.Rdata")
+#   save(rf_levelIII,file="data/rf_levelIII.Rdata")
+#   save(rf_BioGeo,file="data/rf_BioGeo.Rdata")
+#   save(rf_EMAP,file="data/rf_EMAP.Rdata")
+#   save(rf_AggEco,file="data/rf_AggEco.Rdata")
+#   save(rf_LatLon,file="data/rf_LatLon.Rdata")
+#   save(rf_allGeog,file="data/rf_allGeog.Rdata")
+# }
 
-# plot predicted vs. observed for RF model
-tmp <- data.frame(observed=all_coastal$LogCHLA,predicted=all_rf$predicted)
+# The can all be saved together, but the file is large 
+#save(rf_all,rf_subregion,rf_levelIII,rf_BioGeo,rf_EMAP,rf_AggEco,
+#     rf_LatLon,rf_allGeog,file="../data/RandomForestModels2010.Rdata")
 
+# plot predicted vs. observed for RF model and fit a regression line using Model II regression
+tmp <- data.frame(observed=all_coastal$LogCHLA,predicted=rf_all$predicted)
 summary(tmp)
 
-ggplot(tmp,aes(x=observed,y=predicted))+
-  geom_point()
-
-fit <- lmodel2(predicted ~ observed, data=tmp)
+# Plot observed vs. predicted and how SMA regression line
+fit <- lmodel2(predicted ~ observed, data=tmp, nperm=99)
+plot(fit, "SMA") 
+fit
 
 ```
 #3a Random Forest for Variable Selection - 2015 Data
 ```{r "RF2015", eval=FALSE, include=FALSE}
-
-select <- dplyr::select  # if MASS package takes over select function, this returns it to dplyr
 
 all_coastal2015 <- coastal2015 %>% 
   select(c(predictors_coastal,"CHLA..ug.L.")) %>% 
@@ -228,23 +246,31 @@ row.names(all_coastal2015) <- coastal2015$SITE_ID
 all_coastal2015 <- all_coastal2015[complete.cases(all_coastal2015),]
 
 set.seed(62)
-all_rf2015<-randomForest(y=all_coastal2015$LogCHLA,x=all_coastal2015[,predictors_coastal]
+rf_all2015<-randomForest(y=all_coastal2015$LogCHLA,x=all_coastal2015[,predictors_coastal]
                      , ntree=10000, importance=TRUE, proximity=TRUE
                      , keep.forest=TRUE,keep.inbag=TRUE)
 
-#save(all_rf2015,file="RandomForestModels2015.Rdata")
+# If it hasn't already been saved, save the 2015 randomForest model object
+if (!file.exists("data/rf_all2015.Rdata")){
+  save(rf_all2015,file="data/rf_all2015.Rdata")
+}
 
 ```
 #4. 2010 Random Forest for Variable Selection - Evaluation
 ```{r "Evaluate Random Forest Models", eval=FALSE, include=FALSE}
 
-load("RandomForestModels2010.Rdata")
+# load the 2010 randomForest models
+rfs <- c("data/rf_AggEco.Rdata","data/rf_all.Rdata","data/rf_allGeog.Rdata","data/rf_BioGeo.Rdata","data/rf_EMAP.Rdata",
+         "data/rf_LatLon.Rdata","data/rf_levelIII.Rdata","data/rf_subregion.Rdata")
+rfs <- rfs[file.exists(rfs)]
+lapply(rfs,load,.GlobalEnv)
 
 variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Latitude","Longitude","Region","Subregions","Level III","AggEco","EMAP","BioGeo")
-plt_all_RF <- plot_vImp(all_rf,"Variable Importance - 2010, All")
+plt_all_RF <- plot_vImp(rf_all,"Variable Importance - 2010, All")
 
 variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Subregions")
-plt_srOnly <- plot_vImp(rf_subregion,"Variable Importance - 2010, Subregions Only")
+if (!exists("rf_subregion")) {load("data/rf_subregion.Rdata")}
+plt_subregion <- plot_vImp(rf_subregion,"Variable Importance - 2010, Subregions Only")
 
 variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Level III")
 plt_levelIIIOnly <- plot_vImp(rf_levelIII,"Variable Importance - 2010, Level III Only")
@@ -264,7 +290,7 @@ plt_LatLon <- plot_vImp(rf_LatLon,"Variable Importance - 2010, Lat/Lon Only")
 variableLabels <- regionPredictors
 plt_allGeog <- plot_vImp(rf_allGeog,"Variable Importance - 2010, Only Geography")
 
-pdf("Figures/varImpRF_2010.pdf",width=8,height = 10,paper="letter", onefile=TRUE)
+pdf("figures/varImpRF_2010.pdf",width=8,height = 10,paper="letter", onefile=TRUE)
    plt_all_RF
    plt_srOnly
    plt_levelIIIOnly   
@@ -275,14 +301,15 @@ pdf("Figures/varImpRF_2010.pdf",width=8,height = 10,paper="letter", onefile=TRUE
    plt_allGeog
 dev.off()
 
-pdf("Figures/varImpRF_2010_lIIIonly.pdf",width=4,height = 5,paper="letter", onefile=TRUE)
+pdf("figures/varImpRF_2010_lIIIonly.pdf",width=4,height = 5,paper="letter", onefile=TRUE)
    plt_levelIIIOnly+ggtitle("")
 dev.off()
-   pdf("Figures/varImpRF_2010_latlonOnly.pdf",width=4,height = 5,paper="letter", onefile=TRUE)
+
+pdf("figures/varImpRF_2010_latlonOnly.pdf",width=4,height = 5,paper="letter", onefile=TRUE)
    plt_LatLon+ggtitle("")
 dev.off()
 
-
+# Put plots into the Rmd output
 plt_all_RF
 plt_srOnly
 plt_levelIIIOnly   
@@ -292,30 +319,22 @@ plt_BioGeoOnly
 plt_LatLon
 plt_allGeog
 
-# save(
-#   plt_all_RF,
-#   plt_srOnly,
-#   plt_levelIIIOnly,   
-#   plt_EMAPOnly,
-#   plt_AggEcoOnly, 
-#   plt_BioGeoOnly,
-#   plt_LatLon,
-#   plt_allGeog, file="Random_Forest_Plots.Rdata"
-# )
+# remove the randomForest objects to free up memory
+rm(list=c("rf_AggEco","rf_all","rf_allGeog","rf_BioGeo","rf_EMAP",
+         "rf_LatLon","rf_levelIII","rf_subregion"))
 
 ```
 #4a.  2015 Random Forest Variable Selection - Evaluation
 ```{r eval=FALSE, include=FALSE}
 
-load("RandomForestModels2015.Rdata")
+load("data/rf_all2015.Rdata")
 
 # Create variable importance plot as column graph using ggplot
 variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Latitude","Longitude","Region","Subregions","Level III","AggEco","EMAP","BioGeo")
-plt <- plot_vImp(all_rf2015,"Variable Importance - 2015, All")
-
+plt <- plot_vImp(rf_all2015,"Variable Importance - 2015, All")
 plt
 
-pdf("Figures/varImpRF_2015.pdf",width=8,height = 10)
+pdf("figures/varImpRF_2015.pdf",width=8,height = 10)
    plt
 dev.off()
 
@@ -324,12 +343,15 @@ dev.off()
 For 2010 and 2015, Importance is centered (mean is subtracted from each value) so that relative magnitudes can be compared directly.
 ```{r eval=FALSE, include=FALSE}
 
+load("data/rf_all.Rdata")
+
+variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Latitude","Longitude","Region","Subregions","Level III","AggEco","EMAP","BioGeo")
 # combine the two importance records and center so that mean by year =0 for both years.
 importance <- rbind(
   data.frame(Variables=as.character(variableLabels),
-             Importance=scale(as.numeric(importance(all_rf2015,type=1)),center=TRUE,scale=FALSE),year=2010),
+             Importance=scale(as.numeric(importance(rf_all2015,type=1)),center=TRUE,scale=FALSE),year=2010),
   data.frame(Variables=as.character(variableLabels),
-             Importance=scale(as.numeric(importance(all_rf,type=1)),center=TRUE,scale=FALSE),year=2015)
+             Importance=scale(as.numeric(importance(rf_all,type=1)),center=TRUE,scale=FALSE),year=2015)
              )
 
 # calculate mean importance for ordering variables
@@ -345,27 +367,25 @@ plt <- ggplot(data=importance,aes(y=reorder(Variables,mnImp),x=Importance/100,fi
     ggtitle("Variable Importance for Coastal TSI - 2015")
 plt
 
-pdf("Figures/varImpRF_compare2010_2015.pdf",width=8,height = 10)
+pdf("figures/varImpRF_compare2010_2015.pdf",width=8,height = 10)
    plt
 dev.off()
+
+# remove large RF objects from workspace
+rm(list=c("rf_all","rf_all2015"))
+
 ```
 #12a. Fit Bayesian POLR model to 2010 data using Ecoregions
 
 ```{r include=FALSE}
 
-#Level III ecoregion "WILLAMETTE VALLEY" is only in the 2010 data.  Remove it and
-# reset the factor levels
-#coastal2010 <- filter(coastal,SAMPYEAR==2010 & levelIII != "WILLAMETTE VALLEY") %>% 
-#   mutate(levelIII=factor(levelIII))
-
 # How many Ecoregions are there?  Still called "numSubregions" so we can use the same JAGS code
 numSubregions <- length(levels(coastal2010$levelIII))
-#includedRegions <- levels(coastal2010$levelIII)
 
 # Generate Model and Evaluation data sets
 randomSubset(coastal2010,0.1,100)
 
-#set up the initializations 
+# Set up the initialization
 # Create a blank array that can be populated with random values.  Three cut-off points
 cutpt.inits <- array(dim= c(3))
 for (k in 1:3){
@@ -374,25 +394,13 @@ for (k in 1:3){
 cutpt.inits <- sort(cutpt.inits)
 inits <- function () {list("cutpt_raw" = cutpt.inits)}
 
-# Log-transform, then center the transformed values
-# This is the wrong approach to scaling these variables.  The most obvious problem is # that we don't know what the mean and sd are, so future observations cannot be scaled # in the same way.  If TN were to be multiplied by 2 in a future year, doubling 
-# both the mean and standard deviation, there would be no change at all in TN.C.
-# 
-# Instead we chould calculate the mean and se, and retain that.  Future data would 
-# be "approximately" centered reletive to the initial data.  
-# I'm not sure if the initial mean and se should be calculated on all the 2010 
-# data, or just the random subset.
-
-# use a function to calculated centered parameters using provided mean/se
+# Use a function to calculated centered parameters using provided mean/se
 # mean and se are calculated from all 2010 data 
 # returns center variables to Global Environment
+if (!exists("centeringParameters")) {
+  load("data/centeringParameters.Rdata")
+}
 centerParameters(Model,centeringParameters)
-
-#SDD.C <- as.numeric(scale(log(Model$SECCHI_MEAN..m.), center = TRUE, scale = TRUE))
-#TN.C <- as.numeric(scale(log(Model$TN..mgN.L.), center = TRUE, scale = TRUE))
-#TP.C <- as.numeric(scale(log(Model$TP..mgP.L.), center = TRUE, scale = TRUE))
-#DIN.C <- as.numeric(scale(log(Model$DIN..mgN.L.), center = TRUE, scale = TRUE))
-#DIP.C <- as.numeric(scale(log(Model$DIP..mgP.L.), center = TRUE, scale = TRUE))
 
 # level III is passed to the data list instead of "subregions" but variable still called subregion
 # so we can use the same JAGS program
@@ -412,10 +420,10 @@ prior <- build_naive_prior(numSubregions)
 DataList <- append(DataList,prior)
 
 # The parameter(s) to be monitored
-
 parameters = c('alpha_SD', 'alpha_N', 'alpha_P', 'alpha_DIN', 'alpha_DIP', 
                'alpha_SubR','s','C')
 
+# Sending argument "test" runs on Markov-Chain
 #jags_run_parameters("test")
 jags_run_parameters("final")
 
@@ -427,13 +435,16 @@ jags_run_parameters("final")
 ptm <- proc.time()
 # jags.model is used to create an object representing a Bayesian graphical model, 
 # specified with a BUGS-language description of the prior distribution, and a set of data.
-coastal_jags_L3Eco <- jags.model('coastal_jags.R',data = DataList 
+coastal_jags_L3Eco <- jags.model('R/coastal_jags.R',data = DataList 
                            , inits, n.chains = nChains, n.adapt = adaptSteps)
 
 # Stop the clock
 proc.time() - ptm
 
-#save(coastal_jags_L3Eco,file="coastal_jags_L3Eco.Rdata")
+# if the graphic model object has not been saved already, then save it
+if (!file.exists("data/coastal_jags_L3Eco.Rdata")) {
+  save(coastal_jags_L3Eco,file="data/coastal_jags_L3Eco.Rdata")
+}
 
 ```
 
@@ -441,35 +452,45 @@ proc.time() - ptm
 
 ```{r echo=TRUE}
 
-#load("coastal_jags_L3Eco.Rdata")
+#if the JAGS object does not exist, then load it from the saved file
+if (!exists("coastal_jags_L3Eco")) {
+  load("data/coastal_jags_L3Eco.Rdata")  
+}
 
-# Sample the 2010 model with subregions
+# Sample the 2010 model with Level III ecoregions
 ptm <- proc.time()
 coastal_coda_L3Eco <- sample_posterior_distribution(coastal_jags_L3Eco,parameters,iterations=10000)
 proc.time() - ptm
 
-save(coastal_coda_L3Eco,file="coastal_coda2010_L3Eco.(5-10-20).Rdata")
+# if sampled object has not been saved, then save it
+if (!file.exists("data/coastal_coda2010_L3Eco.Rdata")) {
+  save(coastal_coda_L3Eco,file="data/coastal_coda2010_L3Eco.Rdata")  
+}
 
 ```
-#13b. Evaluate Bayesian POLR model for 2010 data using Ecoregions
+#13b. Evaluate Bayesian POLR model for 2010 data 
+Use level III ecoregions, create coefficient summary object
 ```{r, results="asis"}
 
-#load("coastal_coda2010_L3Eco.Rdata")
+# if the sampled object does not exist, load it from stored version
+if (!exists("coastal_coda2010_L3Eco")) {
+  load("coastal_coda2010_L3Eco.Rdata")  
+}
 
-# Plot
-# Plotting Level III Ecoregion distributions
+# Plot posterior distribution of parameters, including
+# cut points, alphas for WQ variables and 
+# alphas for subregions
 # There are 16 Level III ecoregions
-# plot(coastal_coda_L3Eco[,1:3]) #cut points
-# plot(coastal_coda_L3Eco[,4:6]) # DIN, DIP, N
-# plot(coastal_coda_L3Eco[,7:9]) # P, SD, SubR1
-# plot(coastal_coda_L3Eco[,10:12]) # SubR2,3,4
-# plot(coastal_coda_L3Eco[,13:15]) # 5,6,7
-# plot(coastal_coda_L3Eco[,16:18]) # 8,9,10
-# plot(coastal_coda_L3Eco[,19:21]) # 11,12,13
-# plot(coastal_coda_L3Eco[,22:24]) # 14,15,16
-# plot(coastal_coda_L3Eco[,25]) # s
+plot(coastal_coda_L3Eco[,1:3]) #cut points
+plot(coastal_coda_L3Eco[,4:6]) # DIN, DIP, N
+plot(coastal_coda_L3Eco[,7:9]) # P, SD, SubR1
+plot(coastal_coda_L3Eco[,10:12]) # SubR2,3,4
+plot(coastal_coda_L3Eco[,13:15]) # 5,6,7
+plot(coastal_coda_L3Eco[,16:18]) # 8,9,10
+plot(coastal_coda_L3Eco[,19:21]) # 11,12,13
+plot(coastal_coda_L3Eco[,22:24]) # 14,15,16
+plot(coastal_coda_L3Eco[,25]) # s
 
-# Table
 # Table of Parameter distribution statistics
 tmp <- cbind(summary(coastal_coda_L3Eco)$quantiles, summary(coastal_coda_L3Eco)$statistics[,2])
 colnames(tmp)[6] <- "sd"
@@ -486,11 +507,21 @@ MCMC.Coastal.L3Eco <- as.mcmc(CodaOne_L3Eco)
 Coeff.Summary.L3Eco <- build_coefficient_summary(CodaOne_L3Eco)
 print(xtable(Coeff.Summary.L3Eco, floating=FALSE))
 
-# Save the coefficient summary and data
-save(Coeff.Summary.L3Eco,Model,Evaluation,file="Bayesian_POLR_2010.(5-10-20).Rdata")
+# Save the coefficient summary and data if it has not been previously saved
+if (!file.exists("data/Bayesian_POLR_2010.(5-10-20).Rdata")) {
+  save(Coeff.Summary.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2010.(5-10-20).Rdata")
+}
 
-#load("Bayesian_POLR_2010.(5-10-20).Rdata")
-#load("centeringParameters.Rdata")
+```
+# Evaluate 2010 model
+```{r}
+
+if (!exists("Coeff.Summary.L3Eco")) {
+   load("data/Bayesian_POLR_2010.(5-10-20).Rdata")
+}
+if (!exists("centeringParameters")) {
+   load("data/centeringParameters.Rdata")
+}
 
 # Build Coefficient Matrix
 Alpha <- build_coefficient_matrix(Coeff.Summary.L3Eco)
@@ -518,7 +549,7 @@ data.frame(
   u95=Coeff.Summary.L3Eco[,"97.5%"]) %>%
   rbind(
     data.frame(
-      param="Naive",
+      param="Uninformed Prior",
       mean=0,
       sd=31.62,
       l95=-1.96*31.62,
@@ -532,9 +563,7 @@ ggplot(aes(x=param,y=mean))+
   theme(axis.text.x = element_text(angle=90))+
   labs(x="Model Parameter",y="Parameter Value")+
   ggtitle("Bayesian POLR Model Parameters",
-          subtitle="Based on 2010 fit; Errorbars show 95% confidence interval; 'Naive' = mean 0, tau=0.001")
-
-
+          subtitle="Based on 2010 fit; Errorbars show 95% confidence interval; 'Uninformed' = mean 0, tau=0.001")
 
 ```
 
@@ -552,7 +581,7 @@ labelpos <- c((-400+Coeff.Summary.L3Eco["C[1]","mean"])/2,
 plt <- generate_graphic_model(Model,Coeff.Summary.L3Eco,"levelIII") +
   scale_x_continuous(limits=c(-400,400))+
   ggtitle("Trophic State Classification - 2010 Data using Level III Ecoregions",
-              subtitle="2010 Data using Naive Prior")+
+              subtitle="2010 Data using Uninformed Prior")+
     annotate("text",x=labelpos[1],y=0.60,label="Oligotrophic")+
     annotate("text",x=labelpos[2],y=0.60,label="Mesotrophic")+
     annotate("text",x=labelpos[3],y=0.60,label="Eutrophic")+
@@ -560,7 +589,7 @@ plt <- generate_graphic_model(Model,Coeff.Summary.L3Eco,"levelIII") +
 
 plt
 
-pdf("Figures/POLR_Prob_2010L3Eco.(5-10-20).pdf", width=6, height=6, paper="letter")
+pdf("figures/POLR_Prob_2010L3Eco.(5-10-20).pdf", width=6, height=6, paper="letter")
   print(plt)
 dev.off()
 
@@ -569,6 +598,7 @@ dev.off()
 #14a. Process Bayesian model update using 2015 data and Level III ecoregions
 
 ```{r include=FALSE}
+
 # Removing the missing values:
 coastal2015 <- coastal2015[!is.na(coastal2015[,"SECCHI_MEAN..m."]) 
                   & !is.na(coastal2015[,"DIP..mgP.L."]) 
@@ -578,23 +608,11 @@ coastal2015 <- coastal2015[!is.na(coastal2015[,"SECCHI_MEAN..m."])
                   & !is.na(coastal2015[,"levelIII"])
                   & !is.na(coastal2015[,"CHLA..ug.L."]),]
 
-# Replace coastal2015 with the 2010 data to run update with 2010 data
-#  note:  this still did not work.
-#coastal2015 <- coastal2010
-
-#coastal2015 %>% group_by(levelIII) %>% summarize(n=n())
 # Replacing the non-detects with 2010 NCCA MDL values
 # These are not the MDLs for 2015.  There are very few non-detects, however.
 coastal2015[coastal2015[,"TP..mgP.L."]==0,"TP..mgP.L."] <- 0.0012
 coastal2015[coastal2015[,"DIN..mgN.L."]==0,"DIN..mgN.L."] <- 0.001
 coastal2015[coastal2015[,"DIP..mgP.L."]==0,"DIP..mgP.L."] <- 0.0027
-
-# Test is the number of subregions in 2015 is the same as in 2010
-#if (length(unique(coastal2015$levelIII)) != numSubregions) {
-#  stop("Number of regions is not the same as in 2010")
-#}
-# Set the levels in 2015 to be the same as 2010
-#coastal2015 <- mutate(coastal2015,levelIII=factor(levelIII,levels=includedRegions))
 
 # Generate Model and Evaluation data sets
 randomSubset(coastal2015,0.1,100)
@@ -614,13 +632,6 @@ inits <- function () {list("cutpt_raw" = cutpt.inits)}
 
 centerParameters(Model,centeringParameters)
 
-# Log-transform, then center the transformed values
-#SDD.C <- as.numeric(scale(log(Model$SECCHI_MEAN..m.), center = TRUE, scale = TRUE))
-#TN.C <- as.numeric(scale(log(Model$TN..mgN.L.), center = TRUE, scale = TRUE))
-#TP.C <- as.numeric(scale(log(Model$TP..mgP.L.), center = TRUE, scale = TRUE))
-#DIN.C <- as.numeric(scale(log(Model$DIN..mgN.L.), center = TRUE, scale = TRUE))
-#DIP.C <- as.numeric(scale(log(Model$DIP..mgP.L.), center = TRUE, scale = TRUE))
-
 # Create list for input to JAGS
 # Include the number of observations in the Model dataset
 DataList <-  list('TS' = factor(Model[,"TS_Chla_Q"])
@@ -637,17 +648,6 @@ DataList <-  list('TS' = factor(Model[,"TS_Chla_Q"])
 prior <- build_informed_prior(Coeff.Summary.L3Eco,numSubregions)
 #prior <- build_naive_prior(numRegions=15)
 
-# All Naive
-#useNaive <- rep(TRUE,7) 
-# Informed CutPts
-#useNaive <- c(FALSE,rep(TRUE,6))
-# informed Cutpts and WQ parameters
-#useNaive <- c(FALSE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE)
-#names(useNaive) <-  c("cutpts","sd","N","P","DIN","DIP","SubR")
-#prior <- build_mixed_prior(Coeff.Summary.L3Eco,15,useNaive)
-
-#prior <- build_less_informed_prior(Coeff.Summary.L3Eco,numRegions=15)
-
 # append the priors to the input list for JAGS
 DataList <- append(DataList,prior)
 
@@ -656,7 +656,6 @@ parameters = c('alpha_SD', 'alpha_N', 'alpha_P', 'alpha_DIN', 'alpha_DIP', 'alph
 
 #jags_run_parameters("test")
 jags_run_parameters("final")
-
 
 ```
 #14b. Process Bayesian model update using 2015 data and Level III ecoregions
@@ -668,15 +667,18 @@ coastal_jags_update_L3Eco <- jags.model('coastal_jags.R',data = DataList
 # Stop the clock
 proc.time() - ptm
 
-#save(coastal_jags_update_L3Eco,file="coastal_jags_update_L3Eco.Rdata")
-
+if (!file.exists("data/coastal_jags_update_L3Eco.Rdata")) {
+  save(coastal_jags_update_L3Eco,file="coastal_jags_update_L3Eco.Rdata")
+}
 ```
 
 #15a. Sample posterior distribution - 2015 model update using Level III ecoregions
 
 ```{r Sample2015Distribution, echo=TRUE}
 
-#load("coastal_jags_update_L3Eco.Rdata")
+if (!exists("coastal_jags_update_L3Eco")) {
+   load("data/coastal_jags_update_L3Eco.Rdata")  
+}
 
 # Sample the 2015 model with subregions
 ptm <- proc.time()
@@ -686,23 +688,25 @@ proc.time() - ptm
 save(coda_update_L3Eco,file="coda_update_L3Eco.(5-10-20).Rdata")
 
 ```
-#15a. Evaluate 2015 model update using Level III ecoregions
+#15a. Evaluate 2015 model update and generate parameter summary
 ```{r, results="asis"}
 
-#load("coda_update_L3Eco.Rdata")
+if (!exists("coda_update_L3Eco")) {
+ load("coda_update_L3Eco.Rdata")  
+}
 
-# Plot
-# Plotting Level III Ecoregion distributions
-# There are 16 Level III ecoregions
-# plot(coda_update_L3Eco[,1:3]) #cut points
-# plot(coda_update_L3Eco[,4:6]) # DIN, DIP, N
-# plot(coda_update_L3Eco[,7:9]) # P, SD, SubR1
-# plot(coda_update_L3Eco[,10:12]) # SubR2,3,4
-# plot(coda_update_L3Eco[,13:15]) # 5,6,7
-# plot(coda_update_L3Eco[,16:18]) # 8,9,10
-# plot(coda_update_L3Eco[,19:21]) # 11,12,13
-# plot(coda_update_L3Eco[,22:24]) # 14,15,16
-# plot(coda_update_L3Eco[,25]) # s
+#Plot
+#Plotting Level III Ecoregion distributions
+#There are 16 Level III ecoregions
+plot(coda_update_L3Eco[,1:3]) #cut points
+plot(coda_update_L3Eco[,4:6]) # DIN, DIP, N
+plot(coda_update_L3Eco[,7:9]) # P, SD, SubR1
+plot(coda_update_L3Eco[,10:12]) # SubR2,3,4
+plot(coda_update_L3Eco[,13:15]) # 5,6,7
+plot(coda_update_L3Eco[,16:18]) # 8,9,10
+plot(coda_update_L3Eco[,19:21]) # 11,12,13
+plot(coda_update_L3Eco[,22:24]) # 14,15,16
+plot(coda_update_L3Eco[,25]) # s
 
 # Table of Parameter distribution statistics
 tmp <- cbind(summary(coda_update_L3Eco)$quantiles, summary(coda_update_L3Eco)$statistics[,2])
@@ -721,7 +725,23 @@ Coeff.Summary.update.L3Eco <- build_coefficient_summary(CodaOne_update_L3Eco)
 xtable(Coeff.Summary.update.L3Eco, floating=FALSE)
 
 # Save the coefficient summary and data
-save(Coeff.Summary.update.L3Eco,Model,Evaluation,file="Bayesian_POLR_2015update.(5-10-20).Rdata")
+if (!file.exists("data/Bayesian_POLR_2015update.(5-10-20).Rdata")) {
+  save(Coeff.Summary.update.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2015update.(5-10-20).Rdata")
+}
+
+```
+# Compare Parameters from uninformed (2010) and informed models (2015)
+And evaluate predictions from 2015 Update model
+```{r}
+
+# Load the parameter summaries if they do not exist
+if (!exists("Coeff.Summary.L3Eco")) {
+  load("data/Bayesian_POLR_2010.(5-10-20).Rdata")
+}
+if (!exists("Coeff.Summary.update.L3Eco")) {
+  load("data/Bayesian_POLR_2015update.(5-10-20).Rdata")
+}
+
 
 rbind(
 data.frame(
@@ -730,7 +750,7 @@ data.frame(
   sd=Coeff.Summary.L3Eco[,"sd"],
   l95=Coeff.Summary.L3Eco[,"2.5%"],
   u95=Coeff.Summary.L3Eco[,"97.5%"]) %>%
-  mutate(fit="Naive")
+  mutate(fit="2010")
 ,
 data.frame(
   param=rownames(Coeff.Summary.update.L3Eco),
@@ -781,7 +801,6 @@ xtable(CM.TS.Multilevel$table)
 CM.TS.Multilevel$overall["Accuracy"]
 CM.TS.Multilevel$byClass[,"Balanced Accuracy"]
 
-
 ```
 
 #16. Graph 2015 model update using Level III ecoregions
@@ -806,12 +825,9 @@ plt <- generate_graphic_model(Model,Coeff.Summary.update.L3Eco,"levelIII")+
     annotate("text",x=labelpos[4],y=0.65,label="Hypertrophic")
 plt
 
-pdf("Figures/POLR_Prob_2015L3Eco.(5-10-20).pdf", width=6, height=6, paper="letter")
- print(plt)
+pdf("figures/POLR_Prob_2015L3Eco.(5-10-20).pdf", width=6, height=6, paper="letter")
+   print(plt)
 invisible(dev.off())
 
 ```
 
-Introduction to Stan: https://ourcodingclub.github.io/tutorials/stan-intro/
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
