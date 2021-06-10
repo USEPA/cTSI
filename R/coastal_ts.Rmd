@@ -156,7 +156,7 @@ centeringParameters <- filter(tmp,SAMPYEAR==2010) %>% select(-SAMPYEAR)
 
 # if not saved yet, save to Rdata file
 if(!file.exists("data/centeringParameters.Rdata")) {
-  save(centeringParameters,file="../data/centeringParameters.Rdata")
+  save(centeringParameters,file="data/centeringParameters.Rdata")
 }
 
 ```
@@ -400,6 +400,7 @@ inits <- function () {list("cutpt_raw" = cutpt.inits)}
 if (!exists("centeringParameters")) {
   load("data/centeringParameters.Rdata")
 }
+
 centerParameters(Model,centeringParameters)
 
 # level III is passed to the data list instead of "subregions" but variable still called subregion
@@ -785,9 +786,6 @@ Pred.CatAll <- findPredictedClass.TSI(Evaluation,Coeff.Summary.update.L3Eco)
 True.CatAll <- Evaluation[, "TS_Chla_Q"]
 CM.TS.Multilevel <- confusionMatrix(Pred.CatAll, True.CatAll)
 CM.TS.Multilevel
-
-Pred.CatAll <- findPredictedClass(Evaluation,Coeff.Summary.update.L3Eco)
-True.CatAll <- Evaluation[, "TS_Chla_Q"]
 
 xtable(CM.TS.Multilevel$table)
 CM.TS.Multilevel$overall["Accuracy"]

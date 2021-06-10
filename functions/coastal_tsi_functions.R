@@ -1,7 +1,16 @@
 
 ## Coastal TSI Functions
 
-# Clean up region names and variable types
+# J. Hagy
+# 6/10/2021
+# 
+# Functions supporting data analysis for
+# 
+# Quantifying coastal ecosystem condition and a trophic state index with a Bayesian analytical framework
+# Hagy, JD, B. Kreakie, M. Pelletier, F. Nojavan, J. Kiddon, and A. Oczkowski
+
+# Replace region names with better variable names
+# and change to factors
 fixRegions <- function(inData){
   outData <- inData %>% 
   mutate(REGION=as.factor(REGION),
@@ -14,20 +23,14 @@ fixRegions <- function(inData){
   return(outData)
 }
 
-fixRegions.old <- function(inData){
-  outData <- inData %>% 
-    mutate(REGION=as.factor(REGION),
-           SUBREGIONS=as.factor(SUBREGIONS))
-  return(outData)
-}
-
+# Add secchi data for 2015 NCA data
 add2015secchi <- function(inData) {
 # Read 2015 secchi data
 secchi2015 <- read.csv("Raw/Secchi2015.csv", stringsAsFactors = FALSE)
 names(secchi2015) <- c("SITE_ID","VISNUM","SECCHI_MEAN..m.","Visible_on_Bottom")
 
 # A few of the secchi depths have more than one value for SITE_ID and VISNUM.  
-# I averaged them.  Is it possible that VISNUM is wrong?  Need to check! 
+# I averaged them
 secchi2015 <- secchi2015 %>% 
   group_by(SITE_ID,VISNUM) %>% 
   summarize(secchi_update=mean(SECCHI_MEAN..m.)) %>% ungroup() %>% 
@@ -39,13 +42,15 @@ tmp <- left_join(as_tibble(inData),as_tibble(secchi2015),
   as.data.frame() %>% 
   filter(VISNUM==1)
 
-# if secchi depth is missing, update it with the value from the 2015 file
+# Add secchi depth to original data
 tmp$SECCHI_MEAN..m.[is.na(tmp$SECCHI_MEAN..m.)] <- tmp$secchi_update[is.na(tmp$SECCHI_MEAN..m.)]
 tmp <- select(tmp,-secchi_update)
 return(tmp)
 }
 
-# See how many non-detects there are in the complete cases
+# Determine how many non-detects there are in the complete cases.
+# only consider complete cases because these are the data used in the 
+# analysis.
 evaluateNonDetects <- function(inData) {
     
   tmp <- inData[complete.cases(inData[,c("SECCHI_MEAN..m.","DIP..mgP.L.","DIN..mgN.L.",
@@ -72,43 +77,8 @@ evaluateNonDetects <- function(inData) {
   
 }
 
-# Create a function to clean/process the data that can be used for both 2010 and 2015 data to
-# ensure both are processed the same way.
-cleanUp <- function(inData) {
-  
-  # Removes rows where any of these variables has a missing value so that recoding can be done
-  coastal <- inData[complete.cases(inData[,c("SECCHI_MEAN..m.","DIP..mgP.L.","DIN..mgN.L.",
-                                             "TN..mgN.L.","TP..mgP.L.","SUBREGIONS","CHLA..ug.L.")]),]
-  
-  # Replace the non-detects with 2010 NCCA MDL values
-  #   may want to re-consider this approach! 
-  coastal[coastal[,"TP..mgP.L."]==0,"TP..mgP.L."] <- 0.0012
-  coastal[coastal[,"DIN..mgN.L."]==0,"DIN..mgN.L."] <- 0.001
-  coastal[coastal[,"DIP..mgP.L."]==0,"DIP..mgP.L."] <- 0.0027
-  
-  # TS_Chla has 3 categories based on Bricker et al, 2003
-  # TS_Chla_Q has 4 categories based on quantiles of Chl-a data
-  # Chlorophyll a has 4 categories based on quantiles
-  #  - question:  should these quantiles remain the same for 2015 update or be
-  #    updated with the 2015 quantiles?  Seems like should stay the same.
-  tclasses <- c("Oligo", "Meso", "Eu")
-  Breaks_Chla_Q <- c(quantile(coastal[,"CHLA..ug.L."], probs = seq(0, 1, by = 1/4)))
-  coastal <- coastal %>% 
-    mutate(TS_Chla=cut(CHLA..ug.L., breaks=c(-Inf, 5, 20, Inf), labels=tclasses),
-           TS_N=cut(TN..mgN.L., breaks=c(-Inf, 0.1, 1, Inf), labels=tclasses),
-           TS_SD=cut(SECCHI_MEAN..m., breaks=c(-Inf, 1, 3, Inf), labels=tclasses),
-           TS_Chla_Q=cut(CHLA..ug.L., breaks=c(0,Breaks_Chla_Q[c(2,3,4)],Inf), labels=c("Oligo", "Meso", "Eu", "Hyper")))
-  
-  # This is checking if the 3-level trophic state classes are the same 
-  # for Chla, N and SD.  Apparently there is no threshold for P for coastal waters.
-  consistent_ts <- ifelse((coastal$TS_Chla==coastal$TS_N 
-                           & coastal$TS_Chla==coastal$TS_SD
-  ), 1, 0)
-  coastal <- cbind(coastal, consistent_ts)
-  
-  return(coastal)         
-}
-
+# Uses saved mean and standard deviation from 2010 NCA data to centering variables
+# in any data set.
 centerParameters <- function(inData,centeringParameters) {
     cp <- as.matrix(centeringParameters[,c(2,3)])
     rownames(cp) <- centeringParameters[,1] %>% as.matrix()
@@ -124,9 +94,11 @@ centerParameters <- function(inData,centeringParameters) {
                               center = cp["logDIP","mean"], scale = cp["logDIP","sd"]))
 }
 
-# Set-up parameters for Bayesian POLR model in JAGS
+# Create variables with parameters for Bayesian POLR model in JAGS
 # pass NULL or "test" for testing, "final" for final fit
 # returns parameters to global environment
+# for "final" nChains is 3 instead of 1 for testing and
+# numSavedSteps is 50000 instead of 10000.
 jags_run_parameters <- function(phase=NULL) {
   
   # Number of steps to "tune" the samplers.
@@ -170,7 +142,8 @@ plot_vImp <- function(inRF,title) {
 }
 
 # Generate random subsets of data, returning variables "Evaluation" and "Model"
-# to global environment
+# to global environment.  By default, the evaluation fraction is 10% and 
+# the model data has 90% of the data.
 randomSubset <- function(inputData,evalFraction=0.1,seed=100) {
   set.seed(seed)
   # Generate a random list of row indices that specify a random sample, without r   
@@ -182,7 +155,7 @@ randomSubset <- function(inputData,evalFraction=0.1,seed=100) {
   Model <<- inputData[-Sample,] # use the data that isn't for evaluation to fit the model
 }
 
-# Build the naive prior with specified number of subregions
+# Build the naive or uninformed prior with specified number of subregions
 build_naive_prior <- function(numRegions) {
   naive_prior <- list(mn_cut_pts = rep(0,3),
                       tau_cut_pts = rep(0.0001,3),
@@ -225,7 +198,10 @@ build_informed_prior <- function(posterior,numRegions) {
   return(updatedPrior)
 }
 
-
+# This function is not used in the final paper, but was 
+# part of our development process.  It allowed us to specify
+# some of the variables with informed priors, and others 
+# that remained uninformed.
 build_mixed_prior <- function(posterior,numRegions,useNaive) {
   updatedPrior <- build_informed_prior(posterior,numRegions)
   if (useNaive["cutpts"]) {
@@ -259,36 +235,8 @@ build_mixed_prior <- function(posterior,numRegions,useNaive) {
 
 return(updatedPrior)
 }
-
-build_less_informed_prior <- function(posterior,numRegions) {
-  updatedPrior <- list(mn_cut_pts = posterior[1:3,1],
-                       #tau_cut_pts = posterior[1:3,2]^-2,
-                       tau_cut_pts = rep(0.0001,3)*1000,
-                       mn_alpha_SD = posterior[8,1],
-                       #tau_alpha_SD = posterior[8,2]^-2,
-                       tau_alpha_SD = 0.0001,
-                       mn_alpha_N = posterior[6,1],
-                       #tau_alpha_N = posterior[6,2]^-2,
-                       tau_alpha_N = 0.0001,
-                       mn_alpha_P = posterior[7,1],
-                       #tau_alpha_P = posterior[7,2]^-2,
-                       tau_alpha_P = 0.0001,
-                       mn_alpha_DIN = posterior[4,1],
-                       #tau_alpha_DIN = posterior[4,2]^-2,
-                       tau_alpha_DIN = 0.0001,
-                       mn_alpha_DIP = posterior[5,1],
-                       #tau_alpha_DIP = posterior[5,2]^-2,
-                       tau_alpha_DIP = 0.0001,
-                       mn_alpha_SubR = posterior[9:(8+numSubregions),1],
-                       #mn_alpha_SubR = rep(0,numRegions),
-                       #tau_alpha_SubR = posterior[9:(8+numSubregions),2]^-2
-                       tau_alpha_SubR = rep(0.0001,numRegions),
-                       mn_s = log(posterior["s","mean"])
-  )
-  return(updatedPrior)
-}
-
-  
+ 
+# 
 #  Functions from original program created by Farnaz
 expected <- function(x, c1.5, c2.5, c.3.5, sigma){
   p1.5 <- invlogit((x-c1.5)/sigma)
@@ -302,9 +250,7 @@ expected <- function(x, c1.5, c2.5, c.3.5, sigma){
 jitter.binary <- function(a, jitt=.05, up=1){
   up*(a + (1-2*a)*runif(length(a),0,jitt))
 }
-
 logit <- function(x) return(log(x/(1-x)))
-
 invlogit <- function(x) return(1/(1+exp(-x)))
 
 # Sample Posterior distribution using JAGS
@@ -337,7 +283,7 @@ combine_chains <- function(coda_input,nChains) {
   return(combined_coda)
 }
 
-# Build a summary of the coefficients
+# Build a summary of the coefficients using the combined Markov Chains
 build_coefficient_summary <- function(combined_coda) {
   
   # Build a summary of the coefficients
@@ -367,7 +313,8 @@ build_coefficient_matrix <- function(Coeff.Summary) {
   return(Alpha)
 }
 
-# Build region matrix
+# Build region matrix (part of design matrix) using data and
+# provided region variable.
 build_region_matrix <- function(inputData,regionVariable) {
   regionMatrix <- matrix(0, dim(inputData)[1],   
                          length(levels(inputData[,regionVariable])))
@@ -381,7 +328,6 @@ build_region_matrix <- function(inputData,regionVariable) {
 }
 
 # Calculate Predicted Class if TSI is already calculated
-# requires variable "regionEval" to be present in Global Environment
 findPredictedClass.TSI <- function(inData,Coeff.Summary) {
   Pred.CatAll <- cut(inData$TSI,
              breaks=c(-Inf,Coeff.Summary[1:3,"mean"],Inf),
@@ -389,9 +335,9 @@ findPredictedClass.TSI <- function(inData,Coeff.Summary) {
   return(Pred.CatAll)  
 }
 
-# Calculate Predicted Class
-# requires variable "regionEval" to be present in Global Environment
-findPredictedClass <- function(inData,Coeff.Summary,returnTSI=FALSE) {
+# Calculate Predicted Class starting with data
+# this function is not used in the final analysis
+findPredictedClass <- function(inData,regionMatrix,Coeff.Summary,returnTSI=FALSE) {
   # Center, scale, and log transform the evaluation data
   Eval.SDD.C <- as.numeric(scale(log(inData$SECCHI_MEAN..m.), 
                                  center = TRUE, scale =   TRUE))
@@ -405,7 +351,7 @@ findPredictedClass <- function(inData,Coeff.Summary,returnTSI=FALSE) {
                                  center = TRUE, scale = TRUE))
   # Evaluation predictors
   Eval.Predictors <- cbind(Eval.SDD.C, Eval.TN.C, Eval.TP.C, 
-                           Eval.DIN.C, Eval.DIP.C, regionEval)
+                           Eval.DIN.C, Eval.DIP.C, regionMatrix)
   
   # Build Coefficient Matrix
   Alpha <- build_coefficient_matrix(Coeff.Summary)
@@ -437,6 +383,7 @@ findPredictedClass <- function(inData,Coeff.Summary,returnTSI=FALSE) {
   }
 }
 
+## Several functions are used to create plots for visualizing results of POLR model
 # Generate POLR scatterplot
 plot_POLR_results <- function(Model,Alpha,Coeff.Summary,regionVariable) {
   
@@ -524,6 +471,10 @@ generate_graphic_model <- function(inData,Coeff.Summary,regionVariable) {
   return(plt)
 }
 
+# Calculates the probability of a new observation being in one of the trophic 
+# state categories given its TSI value and coefficients of the POLR model.
+# This was used to apply the analysis to Boston Harbor
+# can could be used for other data.
 calculate_ts_probabilities <- function(Coeff.Summary,TSIinput) {
   
   Alpha <- build_coefficient_matrix(Coeff.Summary)
