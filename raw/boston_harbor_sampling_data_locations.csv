@@ -1,0 +1,226 @@
+STUDY_ID,STAT_ID,TARGET_LAT,TARGET_LON,LOC_DESC
+BHWQM,005,42.3550815,-71.1155131,"Charles River, upstream of Cottage Farm and CAM011 (closed)"
+BHWQM,006,42.3525,-71.1085,"Charles River, downstream of Cottage Farm, MWR201"
+BHWQM,007,42.3549986,-71.096893,"Charles River, at MIT Crew Boathouse"
+BHWQM,008,42.3545,-71.0895,"Charles River, downstream of Harvard Bridge"
+BHWQM,009,42.3575,-71.076444,"Charles River, between Harvard and Longfellow Bridges, MWR020"
+BHWQM,010,42.363851,-71.0748092,"Charles River, downstream of Longfellow Bridge"
+BHWQM,011,42.3682841,-71.067075,"Charles River, between Science Museum and Zakim Bridge"
+BHWQM,012,42.3650732,-71.190224,"Charles River, upstream of Watertown Dam and all active CSOs"
+BHWQM,014,42.3705,-71.0515,"Inner Harbor, Charles River mouth, USCG base, near MWR203"
+BHWQM,015,42.383,-71.045167,"Inner Harbor, confluence of Mystic River and Chelsea Creek"
+BHWQM,019,42.3587721,-71.04618,"Inner Harbor, Fort Point Channel mouth, off New England Aquarium, near BOS060"
+BHWQM,024,42.3443055,-71.0088489,"Inner Harbor, mouth of Inner Harbor, red buoy 10"
+BHWQM,038,42.321667,-71.021333,North Dorchester Bay
+BHWQM,044,42.3335,-71.001167,"North Dorchester Bay, mouth, day marker #5"
+BHWQM,047,42.2805,-71.007,"Quincy Bay, Wollaston Beach, off storm drains 7 and 8 at Sachem St."
+BHWQM,048,42.3094877,-70.9898721,"South Dorchester Bay, off Moon Island"
+BHWQM,050,42.3385924,-70.8970088,"Outer Calf Island - off old pilings, 20m off dock"
+BHWQM,055,42.270818,-71.068878,"Neponset River, above Baker Dam in Milton"
+BHWQM,065,42.335,-70.9815,"Inner President Roads, red nun #2"
+BHWQM,066,42.417263,-71.130664,"Mystic River, Boston Ave. bridge"
+BHWQM,077,42.2741132,-70.983783,Quincy off of Merrymount Park
+BHWQM,078,42.2765,-70.9693333,Quincy off of Houghs Neck
+BHWQM,080,42.2755,-70.944833,"Hingham Bay, Quincy Yacht Club - red nun #2"
+BHWQM,083,42.4152026,-71.1370409,"Mystic River, upstream of confluence of Mystic River and Alewife Brook"
+BHWQM,084,42.307833,-71.033333,"South Dorchester Bay, Columbia Point and Savin Hill Cove, at buoy #12"
+BHWQM,105,42.3339441,-70.9472938,Nixes Mate - green can #15
+BHWQM,106,42.3325,-70.959,"Long Island, green can #17"
+BHWQM,115,42.312333,-70.937667,"Quincy, green/red buoy Nantasket Rd"
+BHWQM,116,42.251,-70.953833,"Hingham Bay Fore River, red nun #28"
+BHWQM,117,42.290167,-70.914167,"Hingham/Hull Bay, green can #1"
+BHWQM,118,42.332833,-70.937667,Outer Lovell Island - red nun #8 near Nixes Mate
+BHWQM,124,42.272667,-70.897667,"Hingham Bay, Crow Point Flats"
+BHWQM,129,42.354416,-70.978295,"Deer Island Flats, Winthrop Harbor Approach, green can #5"
+BHWQM,130,42.363333,-70.987333,"Winthrop Harbor, green can #1"
+BHWQM,137,42.3867631,-71.0628286,"Inner Harbor, Mystic River, mouth, 1/3-mile upstream of Tobin Bridge"
+BHWQM,138,42.3593189,-71.0456802,"Inner Harbor, Fort Point Channel mouth, off New England Aquarium, near BOS060 (further offshore than"
+BHWQM,139,42.28667,-70.968333,"Quincy Bay, off Hangmans Island"
+BHWQM,140,42.305833,-71.0405,"South Dorchester Bay, near Columbia Point and Savin Hill Cove"
+BHWQM,141,42.305,-70.930833,"North of Peddocks Island, near Hull Gut"
+BHWQM,142,42.339167,-70.9315,"President Roads, South Channel, green can #13"
+BHWQM,144,42.3596923,-71.1555595,"Charles River, south of Arsenal Complex, near CSO BOS032 (closed), upstream of active CSOs"
+BHWQM,166,42.3661774,-71.0702014,"Charles River, landing in back of Science Museum"
+BHWQM,167,42.395,-71.075833,"Mystic River, Amelia Earhart Dam, upstream side"
+BHWQM,177,42.405722,-71.096351,"Mystic River, Rt 16 bridge, midchannel, downstream side"
+BHWQM,255,42.270657,-71.070707,"Downstream side of pedestrian foot bridge, mid-channel, 150 meters upstream of site 055 and the Bake"
+CSORWM,001,42.3591861,-71.1700919,"Charles River, at Newton Yacht Club, upstream of active CSOs"
+CSORWM,002,42.3630512,-71.1456877,"Charles River, 10m downstream of BOS033 (closed), upstream of active CSOs"
+CSORWM,003,42.3736875,-71.1317945,"Charles River, between CAM005 and CAM007"
+CSORWM,004,42.362948,-71.116901,"Charles River, downstream of River St. bridge"
+CSORWM,005,42.3550815,-71.1155131,"Charles River, upstream of Cottage Farm and CAM011 (closed)"
+CSORWM,006,42.3525,-71.1085,"Charles River, downstream of Cottage Farm, MWR201"
+CSORWM,007,42.3549986,-71.096893,"Charles River, at MIT Crew Boathouse"
+CSORWM,008,42.3545,-71.0895,"Charles River, downstream of Harvard Bridge"
+CSORWM,009,42.3575,-71.076444,"Charles River, between Harvard and Longfellow Bridges, MWR020"
+CSORWM,010,42.363851,-71.0748092,"Charles River, downstream of Longfellow Bridge"
+CSORWM,011,42.3682841,-71.067075,"Charles River, between Science Museum and Zakim Bridge"
+CSORWM,012,42.3650732,-71.190224,"Charles River, upstream of Watertown Dam and all active CSOs"
+CSORWM,013,42.3695045,-71.0539666,"Inner, mouth Charles R near Pool"
+CSORWM,014,42.3705,-71.0515,"Inner Harbor, Charles River mouth, USCG base, near MWR203"
+CSORWM,015,42.383,-71.045167,"Inner Harbor, confluence of Mystic River and Chelsea Creek"
+CSORWM,016,42.3765,-71.0451667,"Inner, off Charlestown Navy Yard"
+CSORWM,017,42.366,-71.046,"Inner, Confl Mystic/Charles R"
+CSORWM,018,42.3505913,-71.051625,"Inner Harbor, Fort Point Channel, Summer St., near BOS064"
+CSORWM,019,42.3587721,-71.04618,"Inner Harbor, Fort Point Channel mouth, off New England Aquarium, near BOS060"
+CSORWM,020,42.3581667,-71.0351667,"Inner, off World Trade Center"
+CSORWM,021,42.3516667,-71.0281667,"Inner, off Airport Tower"
+CSORWM,022,42.342667,-71.028667,"Inner Harbor, Reserved Channel, midchannel"
+CSORWM,023,42.3428333,-71.0211667,"Inner, mouth of Reserved Channel"
+CSORWM,024,42.3443055,-71.0088489,"Inner Harbor, mouth of Inner Harbor, red buoy 10"
+CSORWM,026,42.3988333,-71.0126667,"Inner, near head of Chelsea River"
+CSORWM,027,42.384,-71.0298333,"Inner Harbor, Chelsea Creek, midchannel"
+CSORWM,028,42.334,-71.022167,"Dorchester Bay, Pleasure Bay"
+CSORWM,029,42.3321667,-71.0108333,"Dorchester Bay, off Castle Island"
+CSORWM,030,42.3258333,-71.0128333,"Dorchester Bay, off City Point"
+CSORWM,031,42.3316667,-71.0238333,"Dorchester Bay, Carson Bch Kellys Landing"
+CSORWM,032,42.3294009,-71.0308802,"Dorchester Bay, Carson Bch off N St."
+CSORWM,033,42.327167,-71.036333,"North Dorchester Bay, Carson Beach, off L St."
+CSORWM,034,42.3288333,-71.0415,"Dorchester Bay, Carson Beach off BOS084"
+CSORWM,035,42.3276667,-71.045,"Dorchester Bay, Carson Beach off Headworks"
+CSORWM,036,42.3265,-71.0458333,"North Dorchester Bay, Carson Beach, off McCormack Bathhouse, BOS086"
+CSORWM,037,42.3241667,-71.0448333,"Dorchester Bay, Carson Beach off Blockhouse"
+CSORWM,038,42.321667,-71.021333,North Dorchester Bay
+CSORWM,039,42.3111638,-71.0402167,"South Dorchester Bay, Fox Point, at UMass-Boston dock"
+CSORWM,040,42.3062348,-71.051429,"South Dorchester Bay, Malibu Bay"
+CSORWM,041,42.2996505,-71.0434765,"South Dorchester Bay, Neponset River, Old Colony Yacht Club, near BOS090 (closed)"
+CSORWM,042,42.2847253,-71.0387058,"Neponset River, between Neponset Ave and MBTA bridges"
+CSORWM,043,42.3258333,-70.9941667,"Dorchester Bay, off Spectacle Island"
+CSORWM,044,42.3335,-71.001167,"North Dorchester Bay, mouth, day marker #5"
+CSORWM,045,42.3096667,-70.9993333,Quincy off Thompson Island
+CSORWM,046,42.3145,-70.9903333,Quincy near Sculpin Ledge
+CSORWM,047,42.2805,-71.007,"Quincy Bay, Wollaston Beach, off storm drains 7 and 8 at Sachem St."
+CSORWM,048,42.3094877,-70.9898721,"South Dorchester Bay, off Moon Island"
+CSORWM,049,42.2888333,-71.0028333,"Quincy, red buoy #2 near Squantum"
+CSORWM,050,42.3385924,-70.8970088,"Outer Calf Island - off old pilings, 20m off dock"
+CSORWM,052,42.3942152,-71.0758155,"Inner Harbor, Mystic River, below Earhart Dam, at Somerville Marginal MWR205"
+CSORWM,053,42.2768333,-71.0556667,Neponset upstream BOS095 at bend
+CSORWM,054,42.2774843,-71.0527892,"Neponset River, Granite Ave., near BOS095 (closed)"
+CSORWM,055,42.270818,-71.068878,"Neponset River, above Baker Dam in Milton"
+CSORWM,056,42.4147689,-71.1053218,"Mystic River, 100m upstream of Rt. 93"
+CSORWM,057,42.4152235,-71.1323932,"Mystic River, confluence of Mystic River and Alewife Brook"
+CSORWM,058,42.4180962,-71.1263325,"Mystic, Mystic Valley Parkway"
+CSORWM,059,42.396667,-71.077,"Mystic River, confluence of Mystic and Malden Rivers"
+CSORWM,060,42.3986999,-71.0904612,"Mystic, DCR Sailing Dock"
+CSORWM,061,42.4175404,-71.110167,"Mystic, Medford Square"
+CSORWM,063,42.3425004,-71.036757,"Inner, Reserved Channel at Summer St"
+CSORWM,065,42.335,-70.9815,"Inner President Roads, red nun #2"
+CSORWM,066,42.417263,-71.130664,"Mystic River, Boston Ave. bridge"
+CSORWM,067,42.3997646,-71.0828312,"Mystic River, Route 28 bridge, near SOM007A/MWR205A"
+CSORWM,068,42.4058333,-71.0971667,Mystic R. Basin
+CSORWM,069,42.3859045,-71.0687348,"Inner Harbor, Mystic River, near Schraffts Building, BOS017"
+CSORWM,070,42.4144278,-71.1324126,"Alewife Brook, mouth, off south (upstream) side of Mystic Valley Pkwy Bridge"
+CSORWM,071,42.4092685,-71.1322723,"Alewife, midchannel off SOM002A"
+CSORWM,072,42.40704,-71.1338923,Alewife Brook at Broadway St.
+CSORWM,073,42.4042157,-71.1345381,"Alewife, Cambridge/Somerville line"
+CSORWM,074,42.3974221,-71.1435107,"Alewife Brook, offramp to Alewife MBTA station, downstream of MWR003 and CAM401A"
+CSORWM,075,42.3449553,-71.0595182,"Inner Harbor, Fort Point Channel, Broadway, BOS070"
+CSORWM,076,42.2771667,-70.9986667,"Quincy, off Wollaston Beach"
+CSORWM,077,42.2741132,-70.983783,Quincy off of Merrymount Park
+CSORWM,078,42.2765,-70.9693333,Quincy off of Houghs Neck
+CSORWM,079,42.2834774,-70.9560824,"Nut Island Outfall 103, short outfall"
+CSORWM,080,42.2755,-70.944833,"Hingham Bay, Quincy Yacht Club - red nun #2"
+CSORWM,081,42.296078,-70.9559742,"Quincy, Nut I. outfall 102, near sunken ledge daymark"
+CSORWM,082,42.2950823,-70.9502795,Quincy Nut Island Outfall 101 off Peddocks Island
+CSORWM,083,42.4152026,-71.1370409,"Mystic River, upstream of confluence of Mystic River and Alewife Brook"
+CSORWM,084,42.307833,-71.033333,"South Dorchester Bay, Columbia Point and Savin Hill Cove, at buoy #12"
+CSORWM,085,42.2447,-70.9318,Weymouth Back R upstream Hingham Bay
+CSORWM,086,42.248333,-70.931667,Weymouth Back River downstream of pumping station and Rte 3A railroad bridge
+CSORWM,087,42.252,-70.933,Weymouth Back R off green can #13
+CSORWM,088,42.2521667,-70.9258333,Weymouth Back R Cove By marina
+CSORWM,089,42.2983474,-71.0463469,"South Dorchester Bay, Neponset River, Commercial Point, Victory Rd. Park, BOS090 (closed)"
+CSORWM,090,42.3833333,-71.0058333,Constitution Beach Station 1
+CSORWM,091,42.3830971,-71.0074943,"Constitution Beach off Storm Drain, E. of Beach"
+CSORWM,092,42.3826667,-71.0096667,Constitution Beach Middle of Beach
+CSORWM,093,42.3815,-71.0101667,Constitution Beach Station 3
+CSORWM,094,42.3786667,-71.0096667,Constitution Beach Station 4
+CSORWM,095,42.3803333,-71.0085,Constitution Beach Station 5
+CSORWM,096,42.3815,-71.0078333,Constitution Beach Station 6
+CSORWM,097,42.3826667,-71.0065,Constitution Beach Station 7
+CSORWM,098,42.3788137,-71.0110717,Constitution Beach off of Const. Beach CSO
+CSORWM,099,42.3811667,-71.0048333,Constitution Beach Station 10
+CSORWM,100,42.2928198,-71.0426423,"Neponset Tenean Beach, Middle"
+CSORWM,100.1,42.293462,-71.0433584,"Neponset Tenean Beach, North"
+CSORWM,100.5,42.293462,-71.0433584,"Neponset Tenean Beach, North"
+CSORWM,101,42.3638333,-71.0275,"Inner, By Airport off BWSC#10"
+CSORWM,102,42.3601667,-71.0305,"Inner, Airport Dock off BWSC#11"
+CSORWM,103,42.3781667,-71.0458333,"Inner, off BWSC#9 East Boston"
+CSORWM,104,42.3307,-70.9529,Former Sludge Outfall Site
+CSORWM,105,42.3339441,-70.9472938,Nixes Mate - green can #15
+CSORWM,106,42.3325,-70.959,"Long Island, green can #17"
+CSORWM,107,42.3275,-70.9821,Spectacle Island green can # 1
+CSORWM,108,42.2898883,-71.041758,"Neponset, Pine Neck Crk. St Drain"
+CSORWM,109,42.2923618,-71.0420173,"Neponset, 50m From  Pine Neck Crk. St Drain"
+CSORWM,110,42.2912825,-71.0418034,"Neponset, middle of Pine Neck Creek"
+CSORWM,111,42.350079,-71.0923852,"Charles, Muddy R. at Beacon St. Br"
+CSORWM,112,42.3431613,-71.093976,"Charles, Muddy R. at Park Dr. Br"
+CSORWM,115,42.312333,-70.937667,"Quincy, green/red buoy Nantasket Rd"
+CSORWM,116,42.251,-70.953833,"Hingham Bay Fore River, red nun #28"
+CSORWM,117,42.290167,-70.914167,"Hingham/Hull Bay, green can #1"
+CSORWM,118,42.332833,-70.937667,Outer Lovell Island - red nun #8 near Nixes Mate
+CSORWM,119,42.418105,-71.127362,"Mystic R., upstream Rt. 16 Bridge"
+CSORWM,120,42.4166121,-71.1315889,"Mystic R., Creek 200m downstream #57"
+CSORWM,121,42.2968333,-71.043,"Dorchester Bay, Neponset, green buoy #9"
+CSORWM,122,42.2937814,-71.0401922,"Neponset, Port Norfolk Y.C. Pier"
+CSORWM,123,42.289,-71.035,"Neponset, red can #14"
+CSORWM,124,42.272667,-70.897667,"Hingham Bay, Crow Point Flats"
+CSORWM,125,42.2635551,-70.9469399,"Hingham/Hull Bay, Raccoon Island"
+CSORWM,130,42.363333,-70.987333,"Winthrop Harbor, green can #1"
+CSORWM,144,42.3596923,-71.1555595,"Charles River, south of Arsenal Complex, near CSO BOS032 (closed), upstream of active CSOs"
+CSORWM,145,42.3519299,-71.092007,"Charles River, Stony Brook outfall, MWR023"
+CSORWM,15.1,42.3854451,-71.0394147,"Inner, Chelsea off McCardle Br."
+CSORWM,154,42.3545,-71.049167,Mid channel of Fort Point Channel
+CSORWM,161,42.2922888,-71.0421916,"Tenean Beach, Pine Neck Creek (Mass Hwy?) storm drain"
+CSORWM,162,42.2936944,-71.0445,Tenean Beach DCR storm drain
+CSORWM,163,42.2953139,-71.0453484,"DCR Storm Drain, between Tenean and Victory Park"
+CSORWM,167,42.395,-71.075833,"Mystic River, Amelia Earhart Dam, upstream side"
+CSORWM,172,42.4009177,-71.1363861,"Alewife Brook, upstream side of Mass. Ave. bridge, midchannel, downstream of CAM401B"
+CSORWM,174,42.3970288,-71.1449938,"Alewife Brook, Little River, 415 ft upstream of Rt. 2 east offramp to Alewife MBTA station, upstream"
+CSORWM,176,42.4053,-71.07191,"Malden River, upstream of Rt 16 bridge"
+CSORWM,177,42.405722,-71.096351,"Mystic River, Rt 16 bridge, midchannel, downstream side"
+CSORWM,178,42.353708,-71.049938,"Inner Harbor, Fort Point Channel, Moakley Bridge, upchannel side, near BOS062"
+CSORWM,183,42.392047,-71.050425,"Inner Harbor, Mystic River, Island End River, near marina"
+CSORWM,19.1,42.3545289,-71.049455,"Inner, Fort Pt. Chnl. Northern Ave."
+CSORWM,206,42.352678,-71.110694,"Mid-channel, sampled on the upstream side of the BU Bridge"
+CSORWM,210,42.364722,-71.075833,Lower Charles River downstream of CAM017
+CSORWM,276,42.4022583,-71.13517,"Alewife Brook, 10 yards downstream of SOM001A"
+CSORWM,277,42.40065,-71.137138,"Alewife Brook, 50 yards upstream of CAM401B"
+CSORWM,308,42.39565,-71.143976,"Alewife Brook at CAM401A outfall, upstream of confluence with Little River"
+CSORWM,39.1,42.3088287,-71.0439426,"Dorchester Bay, Fox Point at UMass Dock"
+CSORWM,41.1,42.2996505,-71.0434765,"Dorchester Bay, mouth of Neponset, buoy 11"
+CSORWM,BWSC4,42.361,-71.05,"Boston inner harbor, nearfield for CSO BOS058"
+CSORWM,BWSC5,42.3625,-71.0476667,"Boston inner harbor, farfield for CSO BOS058"
+CSORWM,BWSC6,42.3641667,-71.0488333,"Boston inner harbor, nearfield for CSO BOS057"
+CSORWM,BWSC7,42.372,-71.0515,"Boston inner harbor, nearfield for CSO BOS020"
+CSORWM,BWSC8,42.3795,-71.0486667,"Boston inner harbor, nearfield for CSO BOS019"
+CSORWM,BWSC9,42.3781667,-71.0458333,"Boston inner harbor, nearfield for CSO BOS012"
+TP-OUT,047,42.2805,-71.007,"Quincy Bay, Wollaston Beach, off storm drains 7 and 8 at Sachem St."
+TP-OUT,048,42.3094877,-70.9898721,"South Dorchester Bay, off Moon Island"
+TP-OUT,050,42.3385924,-70.8970088,"Outer Calf Island - off old pilings, 20m off dock"
+TP-OUT,065,42.335,-70.9815,"Inner President Roads, red nun #2"
+TP-OUT,079,42.2834774,-70.9560824,"Nut Island Outfall 103, short outfall"
+TP-OUT,080,42.2755,-70.944833,"Hingham Bay, Quincy Yacht Club - red nun #2"
+TP-OUT,081,42.296078,-70.9559742,"Quincy, Nut I. outfall 102, near sunken ledge daymark"
+TP-OUT,082,42.2950823,-70.9502795,Quincy Nut Island Outfall 101 off Peddocks Island
+TP-OUT,086,42.248333,-70.931667,Weymouth Back River downstream of pumping station and Rte 3A railroad bridge
+TP-OUT,091,42.3830971,-71.0074943,"Constitution Beach off Storm Drain, E. of Beach"
+TP-OUT,098,42.3788137,-71.0110717,Constitution Beach off of Const. Beach CSO
+TP-OUT,105,42.3339441,-70.9472938,Nixes Mate - green can #15
+TP-OUT,116,42.251,-70.953833,"Hingham Bay Fore River, red nun #28"
+TP-OUT,117,42.290167,-70.914167,"Hingham/Hull Bay, green can #1"
+TP-OUT,118,42.332833,-70.937667,Outer Lovell Island - red nun #8 near Nixes Mate
+TP-OUT,126,42.3490021,-70.9619524,Outfall #005
+TP-OUT,129,42.354416,-70.978295,"Deer Island Flats, Winthrop Harbor Approach, green can #5"
+TP-OUT,130,42.363333,-70.987333,"Winthrop Harbor, green can #1"
+TP-OUT,133,42.3665135,-70.9874731,"Cottage Park Yacht Club, red Nun #4"
+TP-OUT,134,42.366,-70.975833,The Basin - green can #3
+TP-OUT,135,42.343667,-70.942,Boston North Channel - red #10 Fl red Bell
+TP-OUT,136,42.343667,-70.928333,Boston South Channel - Old Chart red #12
+TP-OUT,139,42.28667,-70.968333,"Quincy Bay, off Hangmans Island"
+TP-OUT,146,42.341667,-70.956167,Deer Island Outfall #002 at break
+TP-OUT,147,42.3434711,-70.956362,Deer Island Outfall #004
+TP-OUT,159,42.338833,-70.9555,Deer Island Outfall #002
+TP-OUT,160,42.339,-70.9535,Deer Island Outfall #001 - east of Deer Island Light
+TP-OUT,173,42.347239,-70.9599143,End of the DI water transportation Dock
+TP-OUT,175,42.310392,-70.977262,"Outer, southern tip of Long Is."
+TP-OUT,179,42.281544,-70.953972,"Nut Island shoreline, End of Wharf near Outfall #103"

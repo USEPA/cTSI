@@ -1,7 +1,7 @@
 ---
 title: "Apply cTSI to Escambia Bay"
 author: "J. Hagy"
-date: "January 25, 2021"
+date: "June 11, 2021"
 output: pdf_document
 ---
 
@@ -9,6 +9,7 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 
 #install.packages("ggmap")
+#install.packages("quantreg")
 
 library(tidyverse)
 library(gridExtra)
@@ -21,10 +22,13 @@ library(mapview)
 library(leaflet)
 library(RColorBrewer)
 library(qgam)
+library(quantreg)
+library(wesanderson)
+
+
 select <- dplyr::select
 
 source("functions/coastal_tsi_functions.R")
-
 
 ```
 
@@ -35,7 +39,7 @@ Data downloaded from: https://www.mwra.com/harbor/html/wq_data.htm
 
 includeStations <- c(24,38,106,124,138,139,140,141,142)
 
-bh_station_locations <- read.csv("boston_harbor_sampling_data_locations.csv",
+bh_station_locations <- read.csv("raw/boston_harbor_sampling_data_locations.csv",
                                  stringsAsFactors = FALSE) %>% 
   rename(Station.ID=STAT_ID,
          Latitude=TARGET_LAT,
@@ -79,23 +83,26 @@ m  <-  leaflet(bh_station_locations, height = 350*1, width = 350*1, options = le
 m
 #m
 
-mapshot(m, file = "Stations.jpg", vheight=350, vwidth=350, zoom=3, remove_controls = FALSE)
+mapshot(m, file = "figures/Stations.jpg", vheight=350, vwidth=350, zoom=3, remove_controls = FALSE)
 
 # Note:  needed to install PhantomJS to make this work, as below
-#PhantomJS not found. You can install it with webshot::install_phantomjs(). If it is installed, #please make sure the phantomjs executable can be found via the PATH variable.
-#> webshot::install_phantomjs()
-#trying URL 'https://github.com/wch/webshot/releases/download/v0.3.1/phantomjs-2.1.1-windows.zip#'
-#Content type 'application/octet-stream' length 18193653 bytes (17.4 MB)
-#downloaded 17.4 MB
-#phantomjs has been installed to C:\Users\jhagy\AppData\Roaming\PhantomJS
+# PhantomJS not found. You can install it with webshot::install_phantomjs(). If it is installed, 
+# please make sure the phantomjs executable can be found via the PATH variable.
+# > webshot::install_phantomjs()
+# trying URL 'https://github.com/wch/webshot/releases/download/v0.3.1/phantomjs-2.1.1-windows.zip#'
+# Content type 'application/octet-stream' length 18193653 bytes (17.4 MB)
+# downloaded 17.4 MB
+# phantomjs has been installed to C:\Users\jhagy\AppData\Roaming\PhantomJS
 
-#bh_shorelines <- st_read("C:/Users/jhagy/OneDrive - Environmental Protection Agency #(EPA)/jim/GIS/bostonharbor/High Water Shorelines (1800s-2009)/
+# did not ultimately use this for map
+# bh_shorelines <- st_read("C:/Users/jhagy/OneDrive - Environmental Protection Agency #(EPA)/jim/GIS/bostonharbor/High Water Shorelines (1800s-2009)/
 
 ```
 # Make a map using ggmap
-```{r}
+   This is another way to make a map, but I liked the leaflet map better, so did not use this.
+```{r eval=FALSE, include=FALSE}
 
-bh_station_locations <- read.csv("boston_harbor_sampling_data_locations.csv",
+bh_station_locations <- read.csv("raw/boston_harbor_sampling_data_locations.csv",
                                  stringsAsFactors = FALSE) %>% 
   rename(Station.ID=STAT_ID,
          Latitude=TARGET_LAT,
@@ -110,13 +117,13 @@ names(bh_bbox) <- c("left","bottom","right","top")
 
 bh_map <- get_map(location = bh_bbox, maptype = "watercolor", source = "stamen",zoom=12)
 ggmap(bh_map) +
-  geom_point(data=bh_station_locations,mapping = aes(x=Longitude,y=Latitude),color="red",shape=18,size=4) +
+  geom_point(data=bh_station_locations,mapping = aes(x=Longitude,y=Latitude),color="red",shape=18,size=4)
   
 ```
 # Read the Boston Harbor Nutrients data
 
 ```{r}
-bh_nutrients <- read.csv("C:/Users/jhagy/OneDrive - Environmental Protection Agency (EPA)/jim/Kreakie Collaborations/Boston Harbor/bh_nutrients.csv",skip=4) %>% 
+bh_nutrients <- read.csv("raw/bh_nutrients.csv",skip=4) %>% 
   filter(Surface.or.Bottom=="S") %>% 
   mutate(TimeStamp=as.POSIXct(Date.time..EASTERN.STANDARD.TIME.,format="%m/%d/%y %H:%M",tz="Etc/GMT-5"))
          
@@ -136,6 +143,7 @@ bh_nutrients <- bh_nutrients %>% mutate(DIN.mgL=(NOx+NH4)*14.007/1000,
 
 bh_nutrients$DIN.Flag <- ""
 bh_nutrients$DIN.Flag[bh_nutrients$NOx.Flag=="<" | bh_nutrients$NH4.Flag=="<"] <- "<"
+
 ```
 
 # Evaluate frequency of non-detects in the data
@@ -160,7 +168,6 @@ names(tmp) <- c("parameter","LTMDL","GTMDL")
 tmp <- tmp %>% mutate(percentND = 100*LTMDL/(LTMDL+GTMDL))
 
 # Graph it
-
 bh_nutrients %>% 
   filter(between(month(TimeStamp),6,9)) %>% 
   ggplot(aes(x=TimeStamp,y=NOx,color=factor(NOx.Flag)))+
@@ -188,20 +195,29 @@ bh_nutrients %>%
 ```
 # Read the Clarity Data
 ```{r}
-
 # Read the Boston Harbor Water Clarity Data
-bh_clarity <- read.csv("C:/Users/jhagy/OneDrive - Environmental Protection Agency (EPA)/jim/Kreakie Collaborations/Boston Harbor/bh_secchi.csv",skip=5) %>% 
+bh_clarity <- read.csv("raw/bh_secchi.csv",skip=5) %>% 
   filter(Surface.or.Bottom=="S") %>% 
   mutate(TimeStamp=as.POSIXct(Date.time..EASTERN.STANDARD.TIME.,format="%m/%d/%Y %H:%M",tz="Etc/GMT-5"))
 
 keepCols <- c(1,2,3,4,5,14,7,12)
 bh_clarity <- bh_clarity[,keepCols]
 names(bh_clarity)[c(7,8)] <- c("TotalDepth.m","Secchi.Depth.m")
+```
+# Save data set as binary R file or load variables from binary file
+```{r}
+
+# If an R data file hasn't been saved already, create one
+if (!file.exists("data/bostonHarborData.Rdata")) {
+  save(bh_clarity,bh_nutrients,bh_station_locations,file="data/bostonHarborData.Rdata")
+}
+
+if (!exists("bh_clarity")|!exists("bh_nutrients")) {
+  load("data/bostonHarborData.Rdata")
+}
 
 ```
-
-# Graph the summer data
-
+# Graph the summer Boston Harbor data
 ```{r}
 
 # Join nutrients and secchi data, keeping only data needed for POLR
@@ -320,7 +336,8 @@ bh_polr <- bh_polr %>% mutate(
   TN.Flag="",
   TP.Flag="")
 
-# If either of the components of a sum are below reporting limit, flag the sum.
+# If either of the components of a sum are below reporting limit, flag the sum
+# as being left-censored.
 
 bh_polr$DIN.Flag[bh_polr$NH4.Flag=="<" | bh_polr$NOx.Flag=="<"] <- "<"
 bh_polr$DIP.Flag[bh_polr$PO4.Flag=="<" ] <- "<"
@@ -333,8 +350,9 @@ polr.flags <- c("TN.Flag","TP.Flag","DIN.Flag","DIP.Flag")
 bh_polr <- bh_polr %>% 
   select(Station.ID,TimeStamp,all_of(polr.variables),all_of(polr.flags))
 
-save(bh_polr,file="Boston_POLR_Data.Rdata")
-
+if (!file.exists("data/Boston_POLR_Data.Rdata")) {
+save(bh_polr,file="data/Boston_POLR_Data.Rdata")
+}
 ```
 
 # Graph the POLR variables
@@ -383,10 +401,10 @@ plt <- ggplot(tmp,aes(x=TimeStamp,y=value,color=Flag))+
   theme(legend.position="top",legend.title=element_blank(),
         panel.grid=element_blank())
 
-pdf(file="Boston_Harbor_TS.pdf",useDingbats = FALSE,paper="letter",width=7,height=9)
+pdf(file="figures/Boston_Harbor_TS.pdf",useDingbats = FALSE,paper="letter",width=7,height=9)
   plt
 dev.off()
-png(file="Boston_Harbor_TS.png",width=6,height=6,units="in",res=150)
+png(file="figures/Boston_Harbor_TS.png",width=6,height=6,units="in",res=150)
   plt
 dev.off()
 
@@ -403,10 +421,19 @@ rm(tmp)
 
 ```{r}
 
-load("Bayesian_POLR_2015update.(5-10-20).Rdata")
-load("Bayesian_POLR_2010.(5-10-20).Rdata")
-load("centeringParameters.Rdata")
-load("Boston_POLR_Data.Rdata")
+load("data/Bayesian_POLR_2015update.(5-10-20).Rdata")
+load("data/Bayesian_POLR_2010.(5-10-20).Rdata")
+load("data/centeringParameters.Rdata")
+load("data/Boston_POLR_Data.Rdata")
+
+if (!exists("calculate_ts_probabilities")) {
+source("functions/coastal_tsi_functions.R")  
+}
+
+# get the list of level III regions from Model, but remove the NCA data,
+# as this isn't needed.
+levelIIIregions <- levels(Model$levelIII)
+rm(list=c("Evaluation","Model"))
 
 bh <- bh_polr %>% 
 #  filter(Station.ID %in% c(138,140)) %>%
@@ -466,15 +493,15 @@ ggplot(bh,aes(x=year(TimeStamp),y=TSI,color=TS_Chla_Q))+
 tmp <- calculate_ts_probabilities(Coeff.Summary.update.L3Eco,bh$TSI)
 
 bh <- cbind(bh,tmp)
-save(bh,file="BostonHarborTSI.Rdata")
-write.csv(bh,file="BH_TSI.csv",row.names=FALSE)
+save(bh,file="data/BostonHarborTSI.Rdata")
+write.csv(bh,file="outputs/BH_TSI.csv",row.names=FALSE)
 ```
 
 # Evaluate agreement between TSI and Chla
 
 ```{r}
 
-load("BostonHarborTSI.Rdata")
+load("data/BostonHarborTSI.Rdata")
 
 regionEval <- build_region_matrix(bh,"levelIII")
 Pred.CatAll <- findPredictedClass.TSI(bh,Coeff.Summary.update.L3Eco)
@@ -482,19 +509,18 @@ Pred.CatAll <- findPredictedClass.TSI(bh,Coeff.Summary.update.L3Eco)
 CM.TS.Multilevel <- confusionMatrix(Pred.CatAll,bh$TS_Chla_Q)
 CM.TS.Multilevel
 
-
-# Classify Observations
+# Classify Observations using updated POLR model coefficients
 cut_pts <- Coeff.Summary.update.L3Eco[1:3,"mean"]
 bh <- bh %>% mutate(TS_Predicted=cut(TSI,breaks=c(-Inf,cut_pts,Inf),labels=levels(bh$TS_Chla_Q)))
 
 bh %>% filter(TS_Chla_Q=="Oligo" & TS_Chla_Q != TS_Predicted) %>% .[,13:16] %>% summary()
 
 tmp <- bh %>% 
+  mutate(year=year(TimeStamp)) %>% 
   select(year,pMesotrophic,pOligotrophic,pEutrophic,pHypereutrophic) %>% 
   pivot_longer(cols=starts_with("p"),names_to="ProbName",values_to="Prob") %>% 
   mutate(ProbName=factor(ProbName,levels=c("pOligotrophic","pMesotrophic","pEutrophic","pHypereutrophic"),
          labels=c("Oligotrophic","Mesotrophic","Eutrophic","Hypereutrophic")))
-
 
 ggplot(tmp,aes(x=year,y=Prob))+
   facet_wrap(ProbName ~ .,ncol=2)+
@@ -505,16 +531,15 @@ ggplot(tmp,aes(x=year,y=Prob))+
 ```
 
 # Examine How TSI changed in Boston Harbor and compare with how Chl-a changed 
-
 Change in TSI reflects "macroscope" prediction of hos chl-a would be expected to change, whereas change in Chlorophyll-a reflects observed change.  
 
+Used quantile regression here, but later use quantile GAM instead.  Retaining just to show exploration.
+
 ```{r}
+
 ggplot(bh,aes(x=year,y=TSI))+
   geom_point()+
   geom_smooth()
-
-install.packages("quantreg")
-library("quantreg")
 
 # Model year trend in median TSI
 fit1 <- rq(TSI ~ year, tau = .5, data = bh)
@@ -533,9 +558,12 @@ ggplot(bh,aes(x=year,y=CHLA..ug.L.))+
 
 ```
 
-Fit a QGAM through summer Chl-a data in Boston Harbor
+# Fit a QGAM through summer Chl-a data in Boston Harbor
+Use QGAM package
 
 ```{r}
+
+bh$year <- year(bh$TimeStamp)
 
 fit90 <- qgam(CHLA..ug.L. ~ s(year,k=10,bs="ad"),
             data=bh,
@@ -577,7 +605,7 @@ chla_Qgam_plt <- ggplot()+
      labs(x="",y="µg L-1")
 chla_Qgam_plt  
 
-pdf(file="QGAM figure.pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
+pdf(file="figures/QGAM figure.pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
   chla_Qgam_plt  
 dev.off()
 ```
@@ -634,11 +662,12 @@ dev.off()
 
 # Q-Q plots
 ```{r}
+
 load("coastalTSI.Rdata")
 load("BostonHarborTSI.Rdata")
 load("Bayesian_POLR_2015update.(5-10-20).Rdata")
 
-library("wesanderson")
+
 probs <- seq(0.05,0.95,by=0.05)
 
 q.NCCA.TSI <- quantile(coastalTSI$TSI,probs=probs)
@@ -665,8 +694,19 @@ data.frame(q.NCCA.TSI,q.BH.TSI,q.NE.TSI,Quantile=probs) %>%
 ```
 
 # Q-Q Plot of TSI and Chlorophyll-a by period
+This is an interesting plot illustrating how TSI related to Chlorophyll-a
+in each 5 year period.  Chlorophyll-a levels associated with the highest TSI
+values decreased a lot from 1995-2000, falling more inline with the 
+relationship defined by the NCCA.
+
+In other words, Chlorophyll-a during times of higher than normal nutrient levels was higher than expected, and fell to levels more consistent with 
+the large scale relationship.
+
+This plot is not included in the manuscript.
 
 ```{r}
+probs <- seq(0.05,0.95,by=0.05)
+
 yrs <- c(1995,2000)
 q.BH.TSI <- quantile(bh$TSI[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
 q.BH.Chla <- quantile(bh$CHLA..ug.L.[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
@@ -718,12 +758,5 @@ ggplot(tmp,aes(x=q.BH.TSI,y=q.BH.Chla,color=interval))+
   theme_classic()+
   labs(x="Trophic State Index",y="Chlorophyll-a (µg/L",color="")
 
-
-
-
 ```
 
-
-
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
