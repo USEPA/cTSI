@@ -81,9 +81,9 @@ Water clarity data from Boston Harbor downloaded from MWRA at https://www.mwra.c
 
 Nutrients data from Boston Harbor downloaded from MWRA at https://www.mwra.com/harbor/html/wq_data.htm
 
-
-|	Project.ID							|	MWRA project identifier	|	Units	|
+|	VARIABLE NAME	|	DESCRIPTION 	|	UNITS	|
 |:---		|:---		|:---:		|
+|	Project.ID							|	MWRA project identifier	|		|
 |	Region	|			MWRA region containing station	|		|
 |	Subregion	|			MWRA sub-region containing station	|		|
 |	DEP.Segment	|			Massachusetts DEP segment identifier	|		|
