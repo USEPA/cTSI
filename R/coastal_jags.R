@@ -1,3 +1,6 @@
+# JAGS Code to support Bayesian POLR Model
+# J. Hagy 7/16/2021
+# US EPA CEMM/ACESD  hagy.jim@epa.gov
 model{
   for (i in 1:model_obs){
     
