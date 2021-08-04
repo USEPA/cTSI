@@ -1,7 +1,7 @@
 ---
-title: "Apply cTSI to Escambia Bay"
+title: "Apply cTSI to Boston Harbor"
 author: "J. Hagy"
-date: "June 11, 2021"
+date: "June 27, 2021"
 output: pdf_document
 ---
 
@@ -24,6 +24,7 @@ library(RColorBrewer)
 library(qgam)
 library(quantreg)
 library(wesanderson)
+library(NADA)
 
 
 select <- dplyr::select
@@ -286,63 +287,154 @@ bh_polr <- inner_join(
     dplyr::select(Station.ID,TimeStamp,all_of(nut.variables),all_of(nut.flags)),
   by=c("Station.ID","TimeStamp"))
 
-# Establish upper and lower bounds for variables
-bh_polr$NH4.upper <- bh_polr$NH4
-bh_polr$NH4.lower[bh_polr$NH4.Flag=="<"] <- 0
-bh_polr$NH4.lower[bh_polr$NH4.Flag==""] <- bh_polr$NH4[bh_polr$NH4.Flag==""]
+# only keep complete cases.
+complete <- complete.cases(bh_polr[,nut.variables])
 
-bh_polr$NOx.upper <- bh_polr$NOx
-bh_polr$NOx.lower[bh_polr$NOx.Flag=="<"] <- 0
-bh_polr$NOx.lower[bh_polr$NOx.Flag==""] <- bh_polr$NOx[bh_polr$NOx.Flag==""]
+bh_polr <- bh_polr[complete,]
 
-bh_polr$TDN.upper <- bh_polr$TDN
-bh_polr$TDN.lower[bh_polr$TDN.Flag=="<"] <- 0
-bh_polr$TDN.lower[bh_polr$TDN.Flag==""] <- bh_polr$TDN[bh_polr$TDN.Flag==""]
+## Evaluate number of non-detects during summer
+tmp <- bh_polr %>% 
+  filter(between(month(TimeStamp),6,9)) 
 
-bh_polr$PN.upper <- bh_polr$PN
-bh_polr$PN.lower[bh_polr$PN.Flag=="<"] <- 0
-bh_polr$PN.lower[bh_polr$PN.Flag==""] <- bh_polr$PN[bh_polr$PN.Flag==""]
+# very few TDN or PN samples are <MDL
+table(tmp$TDN.Flag) %>% prop.table()*100
+table(tmp$PN.Flag) %>% prop.table()*100
+table(tmp$TDN.Flag=="<" & tmp$PN.Flag=="<" ) %>% prop.table()*100
 
-bh_polr$PO4.upper <- bh_polr$PO4
-bh_polr$PO4.lower[bh_polr$PO4.Flag=="<"] <- 0
-bh_polr$PO4.lower[bh_polr$PO4.Flag==""] <- bh_polr$PO4[bh_polr$PO4.Flag==""]
+# a lot more NH4 and NOx samples are <MDL, but only about 2% of samples
+# are <MDL for both NH4 and NOx.
+table(tmp$NH4.Flag) %>% prop.table()*100
+table(tmp$NOx.Flag=="<") %>% prop.table()*100
+table(tmp$NOx.Flag=="<" | tmp$NH4.Flag=="<") %>% prop.table()*100
+table(tmp$NOx.Flag=="<" & tmp$NH4.Flag=="<") %>% prop.table()*100
 
-bh_polr$TDP.upper <- bh_polr$TDP
-bh_polr$TDP.lower[bh_polr$TDP.Flag=="<"] <- 0
-bh_polr$TDP.lower[bh_polr$TDP.Flag==""] <- bh_polr$TDP[bh_polr$TDP.Flag==""]
+# very few (<1%) of TDP, PP and DIP samples are <MDL.
+table(tmp$TDP.Flag) %>% prop.table()*100
+table(tmp$PP.Flag) %>% prop.table()*100
+table(tmp$TDP.Flag=="<" | tmp$PP.Flag=="<") %>% prop.table()*100
+table(tmp$TDP.Flag=="<" & tmp$PP.Flag=="<") %>% prop.table()*100
+table(tmp$PO4.Flag) %>% prop.table()*100
 
-bh_polr$PP.upper <- bh_polr$PP
-bh_polr$PP.lower[bh_polr$PP.Flag=="<"] <- 0
-bh_polr$PP.lower[bh_polr$PP.Flag==""] <- bh_polr$PP[bh_polr$PP.Flag==""]
 
-for (i in seq(1,nrow(bh_polr))) {
-  bh_polr$NH4.sample[i] <- runif(1,min=bh_polr$NH4.lower[i],max=bh_polr$NH4.upper[i])
-  bh_polr$NOx.sample[i] <- runif(1,min=bh_polr$NOx.lower[i],max=bh_polr$NOx.upper[i])
-  bh_polr$TDN.sample[i] <- runif(1,min=bh_polr$TDN.lower[i],max=bh_polr$TDN.upper[i])
-  bh_polr$PN.sample[i] <- runif(1,min=bh_polr$PN.lower[i],max=bh_polr$PN.upper[i])
-  bh_polr$PO4.sample[i] <- runif(1,min=bh_polr$PO4.lower[i],max=bh_polr$PO4.upper[i])
-  bh_polr$TDP.sample[i] <- runif(1,min=bh_polr$TDP.lower[i],max=bh_polr$TDP.upper[i])
-  bh_polr$PP.sample[i] <- runif(1,min=bh_polr$PP.lower[i],max=bh_polr$PP.upper[i])
-    }
+filter(bh_polr,NH4.Flag=="<") %>% select(NH4) %>% 
+  ggplot(aes(x=NH4))+ 
+     geom_histogram()+scale_x_log10()
+
+# Flagged NH4 values have a variety of values, not all of which seem likely
+# to be right.  Specifically, there are some very high concentrations that are flagged.
+#
+# Most common value for flagged NH4 prior to 2000 is 0.104. After 2000,
+# the most common value is 0.028 and 0.104.
+tmp <- filter(bh_polr,NH4.Flag=="<") %>%
+  filter(year(TimeStamp)<=2000) %>% 
+  select(NH4) %>% 
+  mutate(NH4=as.factor(NH4)) %>% 
+  group_by(NH4) %>% 
+  summarize(n=n())
+
+# The following rules seem reasonable:
+## For samples prior to 2001:
+#   - any flagged samples with concentrations greater than 0.2 
+#     should be unflagged.
+#   - Any unflagged samples with concentrations less than 0.104 should be
+#     flagged and changed to 0.104
+#   - There are no values reported as zero prior to 2000.
+#
+## For samples 2001 and later:
+#   - any flagged samples with concentrations greater than 0.2 
+#     should be unflagged.
+#   - Any unflagged samples with concentrations less than 0.028 
+#     should be flagged and changed to 0.028
+#   - there are 29 unflagged values reported as zero.  These should be changed to
+#     0.028 and flagged (or maybe changed to NA?).
+
+# Set NH4 values after 2000 that are reported as zero to MDL and mark 
+# as non-detect.
+
+# Model replacement values for the non-detects using ROS
+# because the distribution may shift over time, fit ROS in 5 year windows
+# Use functions in coastal_tsi_fuctions.R
+#   - impute_non_detects applies ROS method.
+#   - impute_time_window function applies ROS method to data from 
+#      a span of time specified via inputs 
+
+# For data before 2000
+bh_polr$NH4.Flag[year(bh_polr$TimeStamp)<2000 & bh_polr$NH4==0.104 ] <- "<"
+bh_polr$NH4.Flag[year(bh_polr$TimeStamp)<2000 & bh_polr$NH4>0.2] <- ""
+
+# For data after 2000
+idx <- bh_polr$NH4==0 & year(bh_polr$TimeStamp)>=2000
+bh_polr$NH4.Flag[idx] <- "<" 
+bh_polr$NH4[idx] <- 0.028 
+
+# 1900-2000
+bh_polr2000 <- impute_time_window(bh_polr,1900,2000)
+ggplot(bh_polr2000,aes(x=log(NH4.modeled),fill=NH4.Flag))+
+  geom_histogram(bins=50,center=0.1)
+ggplot(bh_polr2000,aes(x=log(NOx.modeled),fill=NOx.Flag))+
+  geom_histogram(bins=50,center=0.1)
+
+# 2001-2005
+bh_polr2005 <- impute_time_window(bh_polr,2001,2005)
+ggplot(bh_polr2005,aes(x=log(NH4.modeled),fill=NH4.Flag))+
+  geom_histogram(bins=50,center=0.1)
+ggplot(bh_polr2005,aes(x=log(NOx.modeled),fill=NOx.Flag))+
+  geom_histogram(bins=50,center=0.1)
+
+# 2006-2010
+bh_polr2010 <- impute_time_window(bh_polr,2006,2010)
+ggplot(bh_polr2010,aes(x=log(NH4.modeled),fill=NH4.Flag))+
+  geom_histogram(bins=50,center=0.1)
+ggplot(bh_polr2010,aes(x=log(NOx.modeled),fill=NOx.Flag))+
+  geom_histogram(bins=50,center=0.1)
+
+# 2011-2015
+bh_polr2015 <- impute_time_window(bh_polr,2011,2015)
+ggplot(bh_polr2015,aes(x=log(NH4.modeled),fill=NH4.Flag))+
+  geom_histogram(bins=50,center=0.1)
+ggplot(bh_polr2015,aes(x=log(NOx.modeled),fill=NOx.Flag))+
+  geom_histogram(bins=50,center=0.1)
+
+# 2016-2020
+bh_polr2020 <- impute_time_window(bh_polr,2016,2020)
+ggplot(bh_polr2020,aes(x=log(NH4.modeled),fill=NH4.Flag))+
+  geom_histogram(bins=50,center=0.1)
+ggplot(bh_polr2020,aes(x=log(NOx.modeled),fill=NOx.Flag))+
+  geom_histogram(bins=50,center=0.1)
+
+
+bh_polr <- rbind(
+  bh_polr2000,
+  bh_polr2005,
+  bh_polr2010,
+  bh_polr2015,
+  bh_polr2020
+)
 
 # Calculate variables that are calculated from reported values
 bh_polr <- bh_polr %>% mutate(
-  DIN=(NH4.sample+NOx.sample)*14.007/1000,
-  TN=(TDN.sample+PN.sample)*14.007/1000,
-  TP=(TDP.sample+PP.sample)*31/1000,
-  DIP=PO4.sample*31/1000,
+  DIN=(NH4.modeled+NOx.modeled)*14.007/1000,
+  TN=(TDN.modeled+PN.modeled)*14.007/1000,
+  TP=(TDP.modeled+PP.modeled)*31/1000,
+  DIP=PO4.modeled*31/1000,
   DIN.Flag="",
   DIP.Flag="",
   TN.Flag="",
-  TP.Flag="")
+  TP.Flag="") 
 
 # If either of the components of a sum are below reporting limit, flag the sum
 # as being left-censored.
 
 bh_polr$DIN.Flag[bh_polr$NH4.Flag=="<" | bh_polr$NOx.Flag=="<"] <- "<"
+bh_polr$DIN.Flag[bh_polr$NH4.Flag=="<" & bh_polr$NOx.Flag=="<"] <- "<<"
 bh_polr$DIP.Flag[bh_polr$PO4.Flag=="<" ] <- "<"
-bh_polr$TN.Flag[bh_polr$TDN.Flag=="<" | bh_polr$PN.Flag=="<"] <- "<"
+bh_polr$TN.Flag[bh_polr$TDN.Flag=="<" | bh_polr$PN.Flag=="<" ] <- "<"
+bh_polr$TN.Flag[bh_polr$TDN.Flag=="<" & bh_polr$PN.Flag=="<" ] <- "<<"
 bh_polr$TP.Flag[bh_polr$TDP.Flag=="<" | bh_polr$PP.Flag=="<"] <- "<"
+bh_polr$TP.Flag[bh_polr$TDP.Flag=="<" & bh_polr$PP.Flag=="<"] <- "<<"
+
+
+
 
 # Retain only the POLR variables and associated flags
 polr.variables <- c("TN","TP","DIN","DIP","Secchi.Depth.m","Chla")
@@ -350,8 +442,8 @@ polr.flags <- c("TN.Flag","TP.Flag","DIN.Flag","DIP.Flag")
 bh_polr <- bh_polr %>% 
   select(Station.ID,TimeStamp,all_of(polr.variables),all_of(polr.flags))
 
-if (!file.exists("data/Boston_POLR_Data.Rdata")) {
-save(bh_polr,file="data/Boston_POLR_Data.Rdata")
+if (!file.exists("data/Boston_POLR_Data(7-27-21).Rdata")) {
+save(bh_polr,file="data/Boston_POLR_Data(7-27-21).Rdata")
 }
 ```
 
@@ -359,7 +451,10 @@ save(bh_polr,file="data/Boston_POLR_Data.Rdata")
 
 ```{r}
 
-tmp <- bh_polr %>% filter(Station.ID %in% c(138,140)) %>% 
+load("data/Boston_POLR_Data(7-27-21).Rdata")
+
+tmp <- bh_polr %>% 
+  filter(Station.ID %in% c(138,140)) %>% 
   filter(between(month(TimeStamp),6,9)) 
 
 tmp1 <- tmp %>% 
@@ -385,7 +480,7 @@ tmp3 <- tmp %>%
 
 tmp <- cbind(tmp1,Flag=tmp2$Flag) %>% 
   rbind(tmp3) %>% 
-  mutate(Flag=factor(Flag,levels=c("","<"),labels=c("none","< reporting limit")),
+  mutate(Flag=factor(Flag,levels=c("","<","<<"),labels=c("none","< Reporting limit","See caption")),
          Param=factor(Param,
                       levels=c("Chla","Secchi.Depth.m","TN","TP","DIN","DIP"),
                       labels=c("Chla (µg/L)","Secchi Depth (m)","TN (mg-N/L)",
@@ -401,17 +496,12 @@ plt <- ggplot(tmp,aes(x=TimeStamp,y=value,color=Flag))+
   theme(legend.position="top",legend.title=element_blank(),
         panel.grid=element_blank())
 
-pdf(file="figures/Boston_Harbor_TS.pdf",useDingbats = FALSE,paper="letter",width=7,height=9)
+pdf(file="figures/Boston_Harbor_TS(07-27-21).pdf",useDingbats = FALSE,paper="letter",width=7,height=9)
   plt
 dev.off()
-png(file="figures/Boston_Harbor_TS.png",width=6,height=6,units="in",res=150)
+png(file="figures/Boston_Harbor_TS(07-27-21).png",width=6,height=6,units="in",res=150)
   plt
 dev.off()
-
-tmp <- bh_polr %>% filter(Station.ID %in% c(138,140)) %>% 
-  filter(between(month(TimeStamp),6,8)) %>% 
-  mutate(year=year(TimeStamp),
-         Station.ID=factor(Station.ID))
 
 rm(tmp)
 
@@ -421,10 +511,10 @@ rm(tmp)
 
 ```{r}
 
-load("data/Bayesian_POLR_2015update.(5-10-20).Rdata")
-load("data/Bayesian_POLR_2010.(5-10-20).Rdata")
+load("data/Bayesian_POLR_2015update.(7-22-21).Rdata")
+load("data/Bayesian_POLR_2010.(7-22-21).Rdata")
 load("data/centeringParameters.Rdata")
-load("data/Boston_POLR_Data.Rdata")
+load("data/Boston_POLR_Data(7-27-21).Rdata")
 
 if (!exists("calculate_ts_probabilities")) {
 source("functions/coastal_tsi_functions.R")  
@@ -455,14 +545,14 @@ bh <- mutate(bh,TS_Chla_Q=cut(CHLA..ug.L.,
                                         labels=c("Oligo", "Meso", "Eu", "Hyper")))
 
 # Boston Harbor stations have chl-a that is oligo- to meso-trophic most of the time.
-bh %>% group_by(TS_Chla_Q) %>% summarize(n=n()) %>% .[,2] / nrow(bh)
-
+table(bh$TS_Chla)
+table(bh$TS_Chla) %>% prop.table()*100
 
 Alpha <- build_coefficient_matrix(Coeff.Summary.update.L3Eco)
 regionMatrix <- build_region_matrix(bh,"levelIII")
 centerParameters(bh,centeringParameters)
 X <- cbind(SDD.C, TN.C, TP.C, DIN.C, DIP.C, regionMatrix)
-TSI <- X %*% Alpha[,"mean"]
+TSI <- (X %*% Alpha[,"mean"]) / Coeff.Summary.update.L3Eco["s","mean"]
 bh$TSI <- TSI
 
 # Graph frequency histograms of 
@@ -473,9 +563,9 @@ bh %>% mutate(era = cut(year(TimeStamp),breaks=c(1990,2000,2005,2010,2015,2021),
                         labels=c("1995-2000","2000-2005","2005-2010","2010-2015","2015-2020"))
               ) %>% 
   ggplot(aes(x=TSI))+
-  geom_histogram(binwidth = 50,fill="lightblue")+
+  geom_histogram(binwidth = 1,fill="lightblue")+
   facet_grid(era ~ .,scales="free_y")+
-  scale_x_continuous(limits=c(-300,250),breaks=seq(-250,250,by=100))+
+  scale_x_continuous(limits=c(-8,8),breaks=seq(-8,8,by=2))+
   labs(x="Trophic State Index",y="Frequency")+
   geom_vline(xintercept=Coeff.Summary.update.L3Eco[1:3,"mean"],linetype="dotted")+
   theme_classic()+
@@ -483,7 +573,7 @@ bh %>% mutate(era = cut(year(TimeStamp),breaks=c(1990,2000,2005,2010,2015,2021),
 
 ggplot(bh,aes(x=year(TimeStamp),y=TSI,color=TS_Chla_Q))+
   geom_point()+
-  scale_y_continuous(limits=c(-300,250),breaks=seq(-300,250,by=100))+
+  scale_y_continuous(limits=c(-8,8),breaks=seq(-8,8,by=2))+
   scale_x_continuous(breaks=c(1995,2000,2005,2010,2015,2020))+
   labs(y="Trophic State Index",x="")+
   geom_hline(yintercept=Coeff.Summary.update.L3Eco[1:3,"mean"],linetype=2)+
@@ -492,19 +582,26 @@ ggplot(bh,aes(x=year(TimeStamp),y=TSI,color=TS_Chla_Q))+
 
 tmp <- calculate_ts_probabilities(Coeff.Summary.update.L3Eco,bh$TSI)
 
-bh <- cbind(bh,tmp)
-save(bh,file="data/BostonHarborTSI.Rdata")
-write.csv(bh,file="outputs/BH_TSI.csv",row.names=FALSE)
+bh$pOligotrophic <- tmp$pOligotrophic
+bh$pMesotrophic <- tmp$pMesotrophic
+bh$pEutrophic <- tmp$pEutrophic
+bh$Hypertrophic <- tmp$pHypertrophic
+
+save(bh,file="data/BostonHarborTSI (7-30-21).Rdata")
+write.csv(bh,file="outputs/BH_TSI (7-30-21).csv",row.names=FALSE)
 ```
 
 # Evaluate agreement between TSI and Chla
 
 ```{r}
 
-load("data/BostonHarborTSI.Rdata")
+load("data/BostonHarborTSI (7-30-21).Rdata")
 
 regionEval <- build_region_matrix(bh,"levelIII")
 Pred.CatAll <- findPredictedClass.TSI(bh,Coeff.Summary.update.L3Eco)
+
+table(Pred.CatAll)
+table(Pred.CatAll) %>% prop.table()*100
 
 CM.TS.Multilevel <- confusionMatrix(Pred.CatAll,bh$TS_Chla_Q)
 CM.TS.Multilevel
@@ -517,10 +614,10 @@ bh %>% filter(TS_Chla_Q=="Oligo" & TS_Chla_Q != TS_Predicted) %>% .[,13:16] %>% 
 
 tmp <- bh %>% 
   mutate(year=year(TimeStamp)) %>% 
-  select(year,pMesotrophic,pOligotrophic,pEutrophic,pHypereutrophic) %>% 
+  select(year,pMesotrophic,pOligotrophic,pEutrophic,pHypertrophic) %>% 
   pivot_longer(cols=starts_with("p"),names_to="ProbName",values_to="Prob") %>% 
-  mutate(ProbName=factor(ProbName,levels=c("pOligotrophic","pMesotrophic","pEutrophic","pHypereutrophic"),
-         labels=c("Oligotrophic","Mesotrophic","Eutrophic","Hypereutrophic")))
+  mutate(ProbName=factor(ProbName,levels=c("pOligotrophic","pMesotrophic","pEutrophic","pHypertrophic"),
+         labels=c("Oligotrophic","Mesotrophic","Eutrophic","Hypertrophic")))
 
 ggplot(tmp,aes(x=year,y=Prob))+
   facet_wrap(ProbName ~ .,ncol=2)+
@@ -599,14 +696,19 @@ chla_Qgam_plt <- ggplot()+
      geom_line(data=tmp,aes(x=year,y=q50))+
      geom_ribbon(data=tmp,aes(x=year,ymin=q10-se10,ymax=q10+se10),fill=pal[3])+
      geom_line(data=tmp,aes(x=year,y=q10))+
-     #theme_classic()+
+     theme_classic()+
      scale_x_datetime(breaks="5 years",date_labels="%Y")+
      scale_y_log10(breaks=c(3,5,10,20,30))+
      labs(x="",y="µg L-1")
 chla_Qgam_plt  
 
-pdf(file="figures/QGAM figure.pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
-  chla_Qgam_plt  
+pdf(file="figures/QGAM Chla figure(7-27-21).pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
+  chla_Qgam_plt +
+      labs(x="",y="")+
+      theme(
+        axis.text=element_blank(),
+        axis.line = element_line(size=1),
+        axis.ticks = element_line(size=1))
 dev.off()
 ```
 
@@ -649,14 +751,20 @@ TSI_Qgam_plt <- ggplot()+
      geom_line(data=tmp,aes(x=year,y=q50))+
      geom_ribbon(data=tmp,aes(x=year,ymin=q10-se10,ymax=q10+se10),fill=pal[3])+
      geom_line(data=tmp,aes(x=year,y=q10))+
-     #theme_classic()+
+     theme_classic()+
      scale_x_datetime(breaks="5 years",date_labels="%Y")+
-     scale_y_continuous(limits=c(-300,200),breaks=seq(-300,200,by=50))+
+     scale_y_continuous(limits=c(-6,4),breaks=seq(-6,4,by=2))+
      labs(x="",y="Trophic State Index")
 
+TSI_Qgam_plt
 
-pdf(file="QGAM TSI figure.pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
-  TSI_Qgam_plt
+pdf(file="figures/QGAM TSI figure(8-3-21).pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
+  TSI_Qgam_plt+
+      labs(x="",y="")+
+      theme(
+        axis.text=element_blank(),
+        axis.line = element_line(size=1),
+        axis.ticks = element_line(size=1))
 dev.off()
 ```
 

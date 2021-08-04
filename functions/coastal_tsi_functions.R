@@ -51,19 +51,19 @@ return(tmp)
 # Determine how many non-detects there are in the complete cases.
 # only consider complete cases because these are the data used in the 
 # analysis.
-evaluateNonDetects <- function(inData) {
+evaluateNonDetects <- function(inData,mdl) {
     
   tmp <- inData[complete.cases(inData[,c("SECCHI_MEAN..m.","DIP..mgP.L.","DIN..mgN.L.",
                                          "TN..mgN.L.","TP..mgP.L.","SUBREGIONS","CHLA..ug.L.")]),]
   
-  tmp$TP[tmp$TP..mgP.L.==0] <- "nondetect"
-  tmp$TP[tmp$TP..mgP.L.!=0] <- "detect"
-  tmp$TN[tmp$TN..mgN.L.==0] <- "nondetect"
-  tmp$TN[tmp$TN..mgN.L.!=0] <- "detect"
-  tmp$DIN[tmp$DIN..mgN.L.==0] <- "nondetect"
-  tmp$DIN[tmp$DIN..mgN.L.!=0] <- "detect"
-  tmp$DIP[tmp$DIP..mgP.L.==0] <- "nondetect"
-  tmp$DIP[tmp$DIP..mgP.L.!=0] <- "detect"
+  tmp$TP[tmp$TP..mgP.L.<=mdl["TP"]] <- "nondetect"
+  tmp$TP[tmp$TP..mgP.L.>mdl["TP"]] <- "detect"
+  tmp$TN[tmp$TN..mgN.L.<=mdl["TN"]] <- "nondetect"
+  tmp$TN[tmp$TN..mgN.L.>mdl["TN"]] <- "detect"
+  tmp$DIN[tmp$DIN..mgN.L.<=mdl["DIN"]] <- "nondetect"
+  tmp$DIN[tmp$DIN..mgN.L.>mdl["DIN"]] <- "detect"
+  tmp$DIP[tmp$DIP..mgP.L.<=mdl["DIP"]] <- "nondetect"
+  tmp$DIP[tmp$DIP..mgP.L.>mdl["DIP"]] <- "detect"
   
   tmp2 <- tmp %>% dplyr::select(TP,TN,DIN,DIP) %>% 
     pivot_longer(cols = c("TP","TN","DIN","DIP"),names_to="Var",values_to = "Flag") %>% 
@@ -330,7 +330,7 @@ build_region_matrix <- function(inputData,regionVariable) {
 # Calculate Predicted Class if TSI is already calculated
 findPredictedClass.TSI <- function(inData,Coeff.Summary) {
   Pred.CatAll <- cut(inData$TSI,
-             breaks=c(-Inf,Coeff.Summary[1:3,"mean"],Inf),
+             breaks=c(-Inf,Coeff.Summary[1:3,"mean"]/Coeff.Summary["s","mean"],Inf),
              labels=c("Oligo", "Meso", "Eu", "Hyper"))
   return(Pred.CatAll)  
 }
@@ -479,14 +479,59 @@ calculate_ts_probabilities <- function(Coeff.Summary,TSIinput) {
   
   Alpha <- build_coefficient_matrix(Coeff.Summary)
   sigma <- Coeff.Summary["s","mean"] 
-  c <- Coeff.Summary[c("C[1]","C[2]","C[3]"),"mean"]
+  c <- Coeff.Summary[c("C[1]","C[2]","C[3]"),"mean"]/sigma
   se.c <-  Coeff.Summary[c("C[1]","C[2]","C[3]"),"sd"]
   Ibcg <- TSIinput
-  pOligotrophic <- invlogit((c[1] - Ibcg)/sigma)
-  pMesotrophic <- invlogit((c[2] - Ibcg)/sigma) - invlogit((c[1] - Ibcg)/sigma)
-  pEutrophic <- invlogit((c[3] - Ibcg)/sigma) - invlogit((c[2] - Ibcg)/sigma)
-  pHypereutrophic <- 1.0 - invlogit((c[3] - Ibcg)/sigma)
+  pOligotrophic <- invlogit((c[1] - Ibcg))
+  pMesotrophic <- invlogit((c[2] - Ibcg)) - invlogit((c[1] - Ibcg))
+  pEutrophic <- invlogit((c[3] - Ibcg)) - invlogit((c[2] - Ibcg))
+  pHypertrophic <- 1.0 - invlogit((c[3] - Ibcg))
   
-  probs <- data.frame(pOligotrophic,pMesotrophic,pEutrophic,pHypereutrophic)
+  probs <- data.frame(pOligotrophic,pMesotrophic,pEutrophic,pHypertrophic)
   return(probs)
+}
+
+# Used to apply ROS method to Boston Harbor data
+impute_non_detects <- function(inData,concVar,flagVar) {
+  tmp <- inData[,c(concVar,flagVar)]
+  names(tmp) <- c("conc","flag")
+  tmp$censored <- tmp$flag=="<"
+  tmp$order <- seq.int(nrow(tmp))
+  tmp <- tmp[order(tmp$conc),]
+  
+  myROS <- ros(tmp$conc,tmp$censored)
+  myROS.df <- as.data.frame(myROS)
+  
+  tmp <- cbind(tmp %>% select(-censored),myROS.df)
+  
+  tmp <- tmp[order(tmp$order),]
+  
+  return(tmp)
+}
+
+impute_time_window <- function(inData,startYear,endYear){
+  #subset the data
+  windowData <- inData %>% filter(year(TimeStamp)>=startYear & year(TimeStamp)<=endYear)
+  # fit modeled TDN values using ROS
+  tmp <- impute_non_detects(windowData,"TDN","TDN.Flag")
+  windowData$TDN.modeled <- tmp$modeled
+  # fit modeled PN values using ROS
+  tmp <- impute_non_detects(windowData,"PN","PN.Flag")
+  windowData$PN.modeled <- tmp$modeled
+  # fit modeled NH4 values using ROS
+  tmp <- impute_non_detects(windowData,"NH4","NH4.Flag")
+  windowData$NH4.modeled <- tmp$modeled
+  # fit modeled NOx values using ROS
+  tmp <- impute_non_detects(windowData,"NOx","NOx.Flag")
+  windowData$NOx.modeled <- tmp$modeled
+  # fit modeled TDP values using ROS
+  tmp <- impute_non_detects(windowData,"TDP","TDP.Flag")
+  windowData$TDP.modeled <- tmp$modeled
+  # fit modeled PP values using ROS
+  tmp <- impute_non_detects(windowData,"PP","PP.Flag")
+  windowData$PP.modeled <- tmp$modeled
+  # fit modeled PO4 values using ROS
+  tmp <- impute_non_detects(windowData,"PO4","PO4.Flag")
+  windowData$PO4.modeled <- tmp$modeled
+  return(windowData)
 }

@@ -19,7 +19,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # lmodel -> used for model 2 regressions
 
 # Install the packages needed if they aren't already installed
-pkgs <- c("tidyverse","devtools", "randomForest","rjags", "arm", "xtable","caret","knitr","tibble","lmodel2")
+pkgs <- c("tidyverse","devtools", "randomForest","rjags", "arm", "xtable","caret","knitr","tibble","lmodel2","NADA")
 cran_no <- pkgs[!pkgs %in% installed.packages()[,1]]
 for(i in cran_no){
   install.packages(i)
@@ -65,20 +65,101 @@ coastal <- mutate(coastal,TS_Chla_Q=cut(CHLA..ug.L.,
               breaks=Breaks_Chla_Q, 
               labels=c("Oligo", "Meso", "Eu", "Hyper")))
 
+```
+
+# Model non-detects using regression on order statistics
+
+```{r}
+
 # What percentage of non-detects are there for each variable?
 # there is 0 to 2.8% non detects.
-evaluateNonDetects(coastal)
+
+mdl <- NULL
+mdl["TN"] <- 0
+mdl["TP"] <- 0.0025
+mdl["DIN"] <- 0.0025
+mdl["DIP"] <- 0.0025
+
+evaluateNonDetects(coastal,mdl)
 
 # Replace the non-detects reported as zero with 2010 NCCA MDL
-#  there are very few non-detects, so we argue that a more 
+# set flag indicating that value is censored to TRUE
+# there are very few non-detects, so we argue that a more 
 # rigorous approach is not required
-coastal[coastal[,"TP..mgP.L."]==0,"TP..mgP.L."] <- 0.0012
-coastal[coastal[,"DIN..mgN.L."]==0,"DIN..mgN.L."] <- 0.001
-coastal[coastal[,"DIP..mgP.L."]==0,"DIP..mgP.L."] <- 0.0027
+coastal$TP.censored <- FALSE
+coastal[coastal[,"TP..mgP.L."]<=0.0025,"TP.censored"] <- TRUE
+coastal[coastal[,"TP..mgP.L."]<=0.0025,"TP..mgP.L."] <- 0.0025
+
+coastal$DIN.censored <- FALSE
+coastal[coastal[,"DIN..mgN.L."]<=0.0025,"DIN.censored"] <- TRUE
+coastal[coastal[,"DIN..mgN.L."]<=0.0025,"DIN..mgN.L."] <- 0.0025
+
+coastal$DIP.censored <- FALSE
+coastal[coastal[,"DIP..mgP.L."]<=0.0025,"DIP.censored"] <- TRUE
+coastal[coastal[,"DIP..mgP.L."]<=0.0025,"DIP..mgP.L."] <- 0.0025
+
+# model the TP using ROS
+summary(coastal$TP.censored)
+TP.ros <- ros(coastal$TP..mgP.L.,coastal$TP.censored)
+summary(TP.ros)
+TP.ros.df <- as.data.frame(TP.ros)
+
+# replace censored TP in NCA data with modeled TP
+coastal$TP..mgP.L.[coastal$TP.censored] <- TP.ros.df$modeled[TP.ros.df$censored]
+
+# graph the replaced values
+ggplot(coastal,aes(x=TP..mgP.L.,fill=TP.censored))+
+  geom_histogram(binwidth=0.04,boundary=1)+
+  scale_x_log10()+
+  ggtitle("Distribution of TP with imputed values in the left tail",
+           subtitle="Merged into original Data")+
+  labs(x="TP (mgN/L)",y="Frequency")+
+  geom_vline(xintercept=0.0025,linetype=2)
+
+# model the DIN using ROS
+summary(coastal$DIN.censored)
+DIN.ros <- ros(coastal$DIN..mgN.L.,coastal$DIN.censored)
+summary(DIN.ros)
+DIN.ros.df <- as.data.frame(DIN.ros)
+
+# replace DIN in NCA data with modeled DIN
+coastal$DIN..mgN.L.[coastal$DIN.censored] <- DIN.ros.df$modeled[DIN.ros.df$censored]
+
+ggplot(coastal,aes(x=DIN..mgN.L.,fill=DIN.censored))+
+  geom_histogram(binwidth=0.04,boundary=1)+
+  scale_x_log10()+
+  ggtitle("Distribution of DIN with imputed values in the left tail",
+           subtitle="Merged into original Data")+
+  labs(x="DIN (mgN/L)",y="Frequency")+
+  geom_vline(xintercept=0.0025,linetype=2)
+
+# model the DIP using ROS
+summary(coastal$DIP.censored)
+DIP.ros <- ros(coastal$DIP..mgP.L.,coastal$DIP.censored)
+summary(DIP.ros)
+DIP.ros.df <- as.data.frame(DIP.ros)
+
+# replace DIP in NCA data with modeled DIP
+coastal$DIP..mgP.L.[coastal$DIP.censored] <- DIP.ros.df$modeled[DIP.ros.df$censored]
+
+ggplot(coastal,aes(x=DIP..mgP.L.,fill=DIP.censored))+
+  geom_histogram(binwidth=0.04,boundary=1)+
+  scale_x_log10()+
+  ggtitle("Distribution of DIP with imputed values in the left tail",
+           subtitle="Merged into original Data")+
+  labs(x="DIP (mgP/L)",y="Frequency")+
+  geom_vline(xintercept=0.0025,linetype=2)
+
+```
+
+# Assemble final data and save
+
+```{r}
 
 # Define lists of predictors
 nutrientPredictors <- c("TN..mgN.L.","DIN..mgN.L.","TP..mgP.L.","DIP..mgP.L.","DIN.DIP..Molar.","TN.TP..Molar.","SECCHI_MEAN..m.")
-regionPredictors <- c("Latitude","Longitude","REGION","SUBREGIONS","levelIII","AggEco","EMAP","BioGeo")
+#regionPredictors <- c("Latitude","Longitude","REGION","SUBREGIONS","levelIII","AggEco","EMAP","BioGeo")
+regionPredictors <- c("Latitude","Longitude","REGION","levelIII","AggEco","EMAP","BioGeo")
 predictors_coastal <- c(nutrientPredictors,regionPredictors)
 
 # Save the resulting data as Rdata file if the file hasn't been created already.
@@ -89,6 +170,11 @@ if (!file.exists("data/coastalTSI_NCAdata_all.Rdata")) {
 ```
 # 2. Extract the 2010 Data from full data
 ```{r include=FALSE}
+
+if(!exists("coastal")) {
+load("data/coastalTSI_NCAdata_all.Rdata")
+}
+
 # now reading all data at the same time, so just subsample it.
 coastal2010 <- filter(coastal,SAMPYEAR==2010)
 
@@ -166,7 +252,7 @@ Fit Random Forest Models using 2010 data with various possible regionalization v
 
 # Select the variables to be used for randomForest
 all_coastal <- coastal2010 %>% 
-  select(c(predictors_coastal,"CHLA..ug.L.")) %>% 
+  select(all_of(c(predictors_coastal,"CHLA..ug.L."))) %>% 
   mutate(LogCHLA=log10(CHLA..ug.L.)) %>% 
   select(-CHLA..ug.L.)
 
@@ -181,9 +267,6 @@ rf_all<-randomForest(y=all_coastal$LogCHLA,x=all_coastal[,predictors_coastal]
                      , ntree=10000, importance=TRUE, proximity=TRUE
                      , keep.forest=TRUE,keep.inbag=TRUE)
 
-rf_subregion <- randomForest(y=all_coastal$LogCHLA,x=all_coastal[,c(nutrientPredictors,"SUBREGIONS")]
-                     , ntree=10000, importance=TRUE, proximity=TRUE
-                     , keep.forest=TRUE,keep.inbag=TRUE)
 rf_levelIII <- randomForest(y=all_coastal$LogCHLA,x=all_coastal[,c(nutrientPredictors,"levelIII")]
                      , ntree=10000, importance=TRUE, proximity=TRUE
                      , keep.forest=TRUE,keep.inbag=TRUE)
@@ -265,7 +348,7 @@ rfs <- c("data/rf_AggEco.Rdata","data/rf_all.Rdata","data/rf_allGeog.Rdata","dat
 rfs <- rfs[file.exists(rfs)]
 lapply(rfs,load,.GlobalEnv)
 
-variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Latitude","Longitude","Region","Subregions","Level III","AggEco","EMAP","BioGeo")
+variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Latitude","Longitude","Region","Level III","AggEco","EMAP","BioGeo")
 plt_all_RF <- plot_vImp(rf_all,"Variable Importance - 2010, All")
 
 variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Subregions")
@@ -289,6 +372,10 @@ plt_LatLon <- plot_vImp(rf_LatLon,"Variable Importance - 2010, Lat/Lon Only")
 
 variableLabels <- regionPredictors
 plt_allGeog <- plot_vImp(rf_allGeog,"Variable Importance - 2010, Only Geography")
+
+pdf("figures/varImpRFall_2010.pdf",width=8,height = 10,paper="letter", onefile=TRUE)
+   plt_all_RF
+dev.off()
 
 pdf("figures/varImpRF_2010.pdf",width=8,height = 10,paper="letter", onefile=TRUE)
    plt_all_RF
@@ -509,8 +596,8 @@ Coeff.Summary.L3Eco <- build_coefficient_summary(CodaOne_L3Eco)
 print(xtable(Coeff.Summary.L3Eco, floating=FALSE))
 
 # Save the coefficient summary and data if it has not been previously saved
-if (!file.exists("data/Bayesian_POLR_2010.(5-10-20).Rdata")) {
-  save(Coeff.Summary.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2010.(5-10-20).Rdata")
+if (!file.exists("data/Bayesian_POLR_2010.(7-22-21).Rdata")) {
+  save(Coeff.Summary.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2010.(7-22-21).Rdata")
 }
 
 ```
@@ -518,7 +605,7 @@ if (!file.exists("data/Bayesian_POLR_2010.(5-10-20).Rdata")) {
 ```{r}
 
 if (!exists("Coeff.Summary.L3Eco")) {
-   load("data/Bayesian_POLR_2010.(5-10-20).Rdata")
+   load("data/Bayesian_POLR_2010.(7-22-21).Rdata")
 }
 if (!exists("centeringParameters")) {
    load("data/centeringParameters.Rdata")
@@ -590,7 +677,7 @@ plt <- generate_graphic_model(Model,Coeff.Summary.L3Eco,"levelIII") +
 
 plt
 
-pdf("figures/POLR_Prob_2010L3Eco.(5-10-20).pdf", width=6, height=6, paper="letter")
+pdf("figures/POLR_Prob_2010L3Eco.(7-22-21).pdf", width=6, height=6, paper="letter")
   print(plt)
 dev.off()
 
@@ -608,12 +695,6 @@ coastal2015 <- coastal2015[!is.na(coastal2015[,"SECCHI_MEAN..m."])
                   & !is.na(coastal2015[,"TP..mgP.L."])
                   & !is.na(coastal2015[,"levelIII"])
                   & !is.na(coastal2015[,"CHLA..ug.L."]),]
-
-# Replacing the non-detects with 2010 NCCA MDL values
-# These are not the MDLs for 2015.  There are very few non-detects, however.
-coastal2015[coastal2015[,"TP..mgP.L."]==0,"TP..mgP.L."] <- 0.0012
-coastal2015[coastal2015[,"DIN..mgN.L."]==0,"DIN..mgN.L."] <- 0.001
-coastal2015[coastal2015[,"DIP..mgP.L."]==0,"DIP..mgP.L."] <- 0.0027
 
 # Generate Model and Evaluation data sets
 randomSubset(coastal2015,0.1,100)
@@ -663,7 +744,7 @@ jags_run_parameters("final")
 ```{r echo=TRUE}
 # Start the clock!
 ptm <- proc.time()
-coastal_jags_update_L3Eco <- jags.model('coastal_jags.R',data = DataList 
+coastal_jags_update_L3Eco <- jags.model('R/coastal_jags.R',data = DataList 
                            , inits, n.chains = nChains, n.adapt = adaptSteps)
 # Stop the clock
 proc.time() - ptm
@@ -686,14 +767,14 @@ ptm <- proc.time()
 coda_update_L3Eco <- sample_posterior_distribution(coastal_jags_update_L3Eco,parameters,iterations=10000)
 proc.time() - ptm
 
-save(coda_update_L3Eco,file="coda_update_L3Eco.(5-10-20).Rdata")
+save(coda_update_L3Eco,file="coda_update_L3Eco.(7-22-21).Rdata")
 
 ```
 #15a. Evaluate 2015 model update and generate parameter summary
 ```{r, results="asis"}
 
 if (!exists("coda_update_L3Eco")) {
- load("coda_update_L3Eco.Rdata")  
+ load("data/coda_update_L3Eco.Rdata")  
 }
 
 #Plot
@@ -726,8 +807,8 @@ Coeff.Summary.update.L3Eco <- build_coefficient_summary(CodaOne_update_L3Eco)
 xtable(Coeff.Summary.update.L3Eco, floating=FALSE)
 
 # Save the coefficient summary and data
-if (!file.exists("data/Bayesian_POLR_2015update.(5-10-20).Rdata")) {
-  save(Coeff.Summary.update.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2015update.(5-10-20).Rdata")
+if (!file.exists("data/Bayesian_POLR_2015update.(7-22-21).Rdata")) {
+  save(Coeff.Summary.update.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2015update.(7-22-21).Rdata")
 }
 
 ```
@@ -737,12 +818,15 @@ And evaluate predictions from 2015 Update model
 
 # Load the parameter summaries if they do not exist
 if (!exists("Coeff.Summary.L3Eco")) {
-  load("data/Bayesian_POLR_2010.(5-10-20).Rdata")
+  load("data/Bayesian_POLR_2010.(7-22-21).Rdata")
 }
 if (!exists("Coeff.Summary.update.L3Eco")) {
-  load("data/Bayesian_POLR_2015update.(5-10-20).Rdata")
+  load("data/Bayesian_POLR_2015update.(7-22-21).Rdata")
 }
 
+# output POLR model parameters 
+write.csv(cbind(Coeff.Summary.L3Eco,Coeff.Summary.update.L3Eco),
+          file="outputs/POLR_Model_Parameters.csv")
 
 rbind(
 data.frame(
@@ -823,7 +907,7 @@ plt <- generate_graphic_model(Model,Coeff.Summary.update.L3Eco,"levelIII")+
     annotate("text",x=labelpos[4],y=0.65,label="Hypertrophic")
 plt
 
-pdf("figures/POLR_Prob_2015L3Eco.(5-10-20).pdf", width=6, height=6, paper="letter")
+pdf("figures/POLR_Prob_2015L3Eco.(7-23-21).pdf", width=6, height=6, paper="letter")
    print(plt)
 invisible(dev.off())
 
