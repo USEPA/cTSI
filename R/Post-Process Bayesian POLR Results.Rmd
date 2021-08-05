@@ -1,0 +1,422 @@
+---
+title: "Post-Process Bayesian POLR Results"
+author: "J. Hagy"
+date: "August 5, 2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(gridExtra)
+library(RColorBrewer)
+
+source("functions/coastal_tsi_functions.R")
+
+```
+## Compare Parameter Estimates from 2010 and 2015 models
+
+```{r}
+load("data/Bayesian_POLR_2015update.Rdata")
+load("data/Bayesian_POLR_2010.Rdata")
+
+alphaOrder <- seq(c(1,16))
+geographicOrder <- c(5,13,14,1,6,10,3,2,4,16,12,8,7,9,11,15)
+ecoRegionOrder <- data.frame(
+  alphaOrder=seq(1,16),
+  geographicOrder = c(5,13,14,1,6,10,3,2,4,16,12,8,7,9,11,15)
+  )
+
+tmp <- rbind(
+data.frame(
+  param=rownames(Coeff.Summary.L3Eco),
+  mean=Coeff.Summary.L3Eco[,"mean"],
+  sd=Coeff.Summary.L3Eco[,"sd"],
+  l95=Coeff.Summary.L3Eco[,"2.5%"],
+  u95=Coeff.Summary.L3Eco[,"97.5%"]) %>%
+  mutate(fit="Naive")
+,
+data.frame(
+  param=rownames(Coeff.Summary.update.L3Eco),
+  mean=Coeff.Summary.update.L3Eco[,"mean"],
+  sd=Coeff.Summary.update.L3Eco[,"sd"],
+  l95=Coeff.Summary.update.L3Eco[,"2.5%"],
+  u95=Coeff.Summary.update.L3Eco[,"97.5%"]) %>%
+  mutate(fit="Update")
+) %>% 
+  mutate(
+    param=as.factor(param),
+    fit=factor(fit,levels=c("Naive","Update"),
+    labels=c("2010","2010+2015")))
+rownames(tmp) <- NULL
+
+parms <- levels(tmp$param)
+#order <- c(22,23,24,3,4,1,2,5,6,seq(14,21),seq(7,13),25)
+order <- c(22,23,24,3,4,1,2,5,16,20,19,21,6,17,10,9,11,18,12,8,7,14,15,13,25)
+ecoregionNo <- c(82,58,59,64,84,63,75,65,76,73,34,6,7,1,3,2)
+lbl <- c("C1","C2","C3","TN","TP","DIN","DIP","SD",paste0(rep("ER",16),ecoregionNo),"S")
+tmp$param <- factor(tmp$param,levels=parms[order],labels=lbl)
+
+# write parameter values to csv file
+write.csv(tmp,file="outputs/POLR Model Parameters.csv")
+
+fitScale <- tmp %>% 
+  filter(param=="S") %>% 
+  select(mean,fit) %>% 
+  rename(scale=mean)
+
+tmp$scaleFactor[tmp$fit=="2010"] <- fitScale$scaleFactor[fitScale$fit=="2010"]
+
+tmp2 <- left_join(tmp,fitScale,by="fit") %>% 
+  mutate( 
+    mean=mean/scale,
+    sd=sd/scale,
+    l95=l95/scale,
+    u95=u95/scale
+    ) %>% 
+  filter(param !="S")
+
+
+plt <- ggplot(tmp2,aes(x=param,y=mean,fill=fit))+
+  geom_col(position="dodge")+
+  geom_errorbar(aes(ymin=l95,ymax=u95),position="dodge")+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle=90))+
+  labs(x="Model Parameter",y="Parameter Value")+
+  theme(legend.title = element_blank(),
+        legend.position="top")
+
+plt + ggtitle("Bayesian POLR Model Parameters",
+          subtitle="Update using 2015 data; Errorbars show 95% confidence interval")
+
+pdf("figures/Parameter_Comparison.pdf",width=8,height = 4,paper="letter")
+   plt
+dev.off()
+
+
+```
+
+## Compare Proability Distributions for 2010 and 2015 updates
+
+```{r pressure, echo=FALSE}
+
+load("data/Bayesian_POLR_2015update.Rdata")
+load("data/Bayesian_POLR_2010.Rdata")
+
+build_lines <- function(Coeff.Summary,TSIrange) {
+
+    Alpha <- build_coefficient_matrix(Coeff.Summary)
+    sigma <- Coeff.Summary["s","mean"] 
+    c <- Coeff.Summary[c("C[1]","C[2]","C[3]"),"mean"]
+    se.c <-  Coeff.Summary[c("C[1]","C[2]","C[3]"),"sd"]
+    Ibcg <- seq(TSIrange[1],TSIrange[2], length.out = 100)
+    pA <- invlogit((c[1] - Ibcg)/sigma)
+    pB <- invlogit((c[2] - Ibcg)/sigma) - invlogit((c[1] - Ibcg)/sigma)
+    pC <- invlogit((c[3] - Ibcg)/sigma) - invlogit((c[2] - Ibcg)/sigma)
+    pNA <- 1.0 - invlogit((c[3] - Ibcg)/sigma)
+  
+  # Plot the same graph using ggplot
+  alllines <- rbind(data.frame(TSI=Ibcg,Prob=pA,class="Oligotrophic"),
+                    data.frame(TSI=Ibcg,Prob=pB,class="Mesotrophic"),
+                    data.frame(TSI=Ibcg,Prob=pC,class="Eutrophic"),
+                    data.frame(TSI=Ibcg,Prob=pNA,class="Hypereutrophic"))
+  
+  return(alllines)
+}
+build_lines_scaled <- function(Coeff.Summary,TSIrange) {
+
+    Alpha <- build_coefficient_matrix(Coeff.Summary)
+    sigma <- Coeff.Summary["s","mean"] 
+    c <- Coeff.Summary[c("C[1]","C[2]","C[3]"),"mean"]/Coeff.Summary["s","mean"]
+    se.c <-  Coeff.Summary[c("C[1]","C[2]","C[3]"),"sd"]/Coeff.Summary["s","mean"]
+    Ibcg <- seq(TSIrange[1],TSIrange[2], length.out = 100)
+    pA <- invlogit((c[1] - Ibcg))
+    pB <- invlogit((c[2] - Ibcg)) - invlogit((c[1] - Ibcg))
+    pC <- invlogit((c[3] - Ibcg)) - invlogit((c[2] - Ibcg))
+    pNA <- 1.0 - invlogit((c[3] - Ibcg))
+  
+  # Plot the same graph using ggplot
+  alllines <- rbind(data.frame(TSI=Ibcg,Prob=pA,class="Oligotrophic"),
+                    data.frame(TSI=Ibcg,Prob=pB,class="Mesotrophic"),
+                    data.frame(TSI=Ibcg,Prob=pC,class="Eutrophic"),
+                    data.frame(TSI=Ibcg,Prob=pNA,class="Hypereutrophic"))
+  
+  return(alllines)
+}
+
+lines2010 <- build_lines_scaled(Coeff.Summary.L3Eco,c(-7,7)) %>% 
+  mutate(mod=factor("2010")) %>% 
+  mutate(class=factor(class,levels=c("Oligotrophic","Mesotrophic",
+                      "Eutrophic","Hypereutrophic")))
+
+lines2015 <- build_lines_scaled(Coeff.Summary.update.L3Eco,c(-7,7)) %>% 
+  mutate(mod=factor("2010+2015")) %>% 
+  mutate(class=factor(class,levels=c("Oligotrophic","Mesotrophic",
+                      "Eutrophic","Hypereutrophic")))
+all_lines <- rbind(lines2010,lines2015)
+
+s2010 <- Coeff.Summary.L3Eco["s","mean"]
+xmin.2010 <- (Coeff.Summary.L3Eco[c("C[1]","C[2]","C[3]"),"mean"]-
+  Coeff.Summary.L3Eco[c("C[1]","C[2]","C[3]"),"sd"])/s2010
+xmax.2010 <- (Coeff.Summary.L3Eco[c("C[1]","C[2]","C[3]"),"mean"]+
+  Coeff.Summary.L3Eco[c("C[1]","C[2]","C[3]"),"sd"])/s2010
+s2015 <- Coeff.Summary.update.L3Eco["s","mean"]
+xmin.2015 <- (Coeff.Summary.update.L3Eco[c("C[1]","C[2]","C[3]"),"mean"]-
+  Coeff.Summary.update.L3Eco[c("C[1]","C[2]","C[3]"),"sd"])/s2015
+xmax.2015 <- (Coeff.Summary.update.L3Eco[c("C[1]","C[2]","C[3]"),"mean"]+
+  Coeff.Summary.update.L3Eco[c("C[1]","C[2]","C[3]"),"sd"])/s2015
+
+POLR2010 <- ggplot()+
+  geom_rect(aes(xmin=xmin.2010,xmax=xmax.2010,ymin=rep(0,3),ymax=rep(1,3)),
+            fill="lightblue1",alpha=1.0)+
+  geom_line(data=lines2010,aes(x=TSI,y=Prob,color=class,linetype=mod),size=1)+
+  geom_vline(xintercept=Coeff.Summary.L3Eco[c("C[1]","C[2]","C[3]"),
+            "mean"]/s2010,linetype="solid",color="grey",size=1)+
+  scale_y_continuous(expand=c(0,0))+
+  theme_classic()+
+  theme(legend.position="top",legend.title=element_blank())+
+  scale_color_brewer(name="Trophic Class", palette="Set2") +
+  scale_linetype_manual(values=c("solid", "dashed"))+
+  scale_x_continuous(limits=c(-8,8),breaks=seq(-8,8,by=1))+
+  labs(x="",y="")
+POLR2010
+
+POLR2015 <- ggplot()+
+  geom_rect(aes(xmin=xmin.2015,xmax=xmax.2015,ymin=rep(0,3),ymax=rep(1,3)),
+            fill="lightblue1",alpha=1.0)+
+  geom_line(data=lines2015,aes(x=TSI,y=Prob,color=class,linetype=mod),size=1)+
+  geom_vline(xintercept=Coeff.Summary.update.L3Eco[c("C[1]","C[2]","C[3]"),
+            "mean"]/s2015,linetype="solid",color="grey",size=1)+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(limits=c(-8,8),breaks=seq(-8,8,by=1))+
+  theme_classic()+
+  theme(legend.position="top",legend.title=element_blank())+
+  scale_color_brewer(name="Trophic Class", palette="Set2") +
+  scale_linetype_manual(values=c("solid","dashed"))+
+  labs(x="",y="")
+POLR2015
+
+bothPlots <- ggplot()+
+  geom_rect(aes(xmin=xmin.2010,xmax=xmax.2010,ymin=rep(0,3),ymax=rep(1,3)),
+            fill="lightblue1",alpha=1.0)+
+  geom_rect(aes(xmin=xmin.2015,xmax=xmax.2015,ymin=rep(0,3),ymax=rep(1,3)),
+            fill="light green",alpha=0.2)+
+  geom_line(data=all_lines,aes(x=TSI,y=Prob,color=class,linetype=mod),size=1)+
+  geom_vline(xintercept=Coeff.Summary.L3Eco[c("C[1]","C[2]","C[3]"),
+            "mean"]/s2010,linetype="dashed",color="grey",size=1)+
+  geom_vline(xintercept=Coeff.Summary.update.L3Eco[c("C[1]","C[2]","C[3]"),
+            "mean"]/s2015,linetype="solid",color="grey",size=1)+
+  scale_y_continuous(expand=c(0,0))+
+  scale_x_continuous(limits=c(-7,7),breaks=seq(-7,7,by=1))+
+  theme_classic()+
+  theme(legend.position="top",legend.title=element_blank())+
+  scale_color_brewer(name="Trophic Class", palette="Set2") +
+  scale_linetype_manual(values=c("dashed", "solid"))+
+  labs(x="Trophic State Index",y="")
+bothPlots
+
+pdf(file="figures/ProbPlotsStacked.pdf",width=7,height=10,paper="letter",useDingbats = TRUE)
+  grid.arrange(POLR2010,POLR2015,bothPlots)
+dev.off()
+
+```
+# Apply TSI to 2015 data and save the result
+```{r}
+
+# Calculates the TSI using the final alphas (coefficients from 2015 update) for all 
+# the observations in both 2010 and 2015.
+
+load("data/Bayesian_POLR_2015update.Rdata")
+load("data/coastalTSI_NCAdata_all.Rdata")
+load("data/centeringParameters.Rdata")
+
+Alpha <- build_coefficient_matrix(Coeff.Summary.update.L3Eco)
+sigma <- Coeff.Summary.update.L3Eco["s","mean"]
+regionMatrix <- build_region_matrix(coastal,"levelIII")
+centerParameters(coastal,centeringParameters)
+X <- cbind(SDD.C, TN.C, TP.C, DIN.C, DIP.C, regionMatrix)
+TSI <- (X %*% Alpha[,"mean"])/sigma
+coastal$TSI <- as.numeric(TSI)
+
+# Calculate classification probabilities and add to data frame
+tmp <- calculate_ts_probabilities(Coeff.Summary.update.L3Eco,coastal$TSI)
+coastal$pOligotrophic <- tmp$pOligotrophic
+coastal$pMesotrophic <- tmp$pMesotrophic
+coastal$pEutrophic <- tmp$pEutrophic
+coastal$Hypertrophic <- tmp$pHypertrophic
+
+save(coastal,file="data/coastalTSI.Rdata")
+write.csv(coastal,file="outputs/coastalTSI.csv",row.names=FALSE)
+
+# Graph the mean and se of TSI for each Level III ecoregion
+coastal %>% group_by(levelIII) %>% summarize(meanTSI=mean(TSI),seTSI=sd(TSI)/n()^0.5) %>% 
+  ggplot(aes(y=levelIII,x=meanTSI)) +
+  geom_col()+
+  geom_errorbar(aes(xmin= meanTSI-seTSI, xmax = meanTSI+seTSI),width=0.5)+
+  theme_classic()
+
+tmp <- coastal %>% 
+  group_by(levelIII) %>% 
+  summarize(meanTSI=mean(TSI),sdTSI=sd(TSI)) %>% 
+   cbind(.,Coeff.Summary.update.L3Eco[9:24,"mean"]/sigma,
+          Coeff.Summary.update.L3Eco[9:24,"2.5%"]/sigma,
+          Coeff.Summary.update.L3Eco[9:24,"97.5%"]/sigma) 
+names(tmp)[4:6] <- c("alphaER","lcl_alphaER","ucl_alphaER")
+
+tmp <- tmp %>% mutate(wqComponent=meanTSI-alphaER,
+                      type="Ecoregion")
+
+# summary stats for regional and water components of the TSI
+summary(tmp)
+
+# compare the relative magnitude of variability in the 
+# average water quality and regional components of TSI
+range(tmp$wqComponent)[2]-range(tmp$wqComponent)[1]
+range(tmp$alphaER)[2]-range(tmp$alphaER)[1]
+(range(tmp$wqComponent)[2]-range(tmp$wqComponent)[1])/  (range(tmp$alphaER)[2]-range(tmp$alphaER)[1])
+mean(abs(tmp$wqComponent))
+mean(abs(tmp$alphaER))
+mean(tmp$wqComponent)
+mean(tmp$alphaER)
+
+load("data/BostonHarborTSI.Rdata")
+sigma <- Coeff.Summary.update.L3Eco["s","mean"]
+bh_avg <- bh %>% 
+  #calculate standard error of mean, but the purpose is to communicate 
+  #variability rather than confidence in the estimate.
+  #summarize(meanTSI=mean(TSI),seTSI=sd(TSI)/n()^0.5) %>% 
+  summarize(meanTSI=mean(TSI),sdTSI=sd(TSI)) %>% 
+  cbind(.,Coeff.Summary.update.L3Eco[15,"mean"]/sigma,
+          Coeff.Summary.update.L3Eco[15,"2.5%"]/sigma,
+          Coeff.Summary.update.L3Eco[15,"97.5%"]/sigma) %>% 
+  mutate(levelIII="Boston Harbor") %>% 
+  mutate(levelIII=factor(levelIII))
+names(bh_avg)[3:5] <- c("alphaER","lcl_alphaER","ucl_alphaER")
+bh_avg <- bh_avg %>% mutate(wqComponent=meanTSI-alphaER,
+                            type="Case Study")
+
+tmp <- rbind(tmp,bh_avg[,c(6,1,2,3,4,5,7,8)])
+
+# add a region number
+tmp <- mutate(tmp,er=as.factor(c(as.character(seq(1,16)),"BH")))
+
+pal=brewer.pal(4,"Set2")
+
+# Plot the nutrients and regional component of the TSI
+plt <- ggplot(tmp,aes(x=wqComponent,y=alphaER,color=type)) +
+  geom_point(size=3,shape=18) + 
+  scale_color_manual(values=pal[c(2,3)])+
+  geom_errorbarh(aes(xmin=wqComponent-sdTSI,
+        xmax=wqComponent+sdTSI),height=0.3)+
+  geom_errorbar(aes(x=wqComponent,ymin=lcl_alphaER,
+        ymax=ucl_alphaER),width=0.3)+
+  geom_text(aes(label=er),nudge_y=0.25,nudge_x=0.2,size=4)+
+  geom_vline(xintercept=0,linetype=2)+
+  geom_hline(yintercept=0,linetype=2)+
+  scale_x_continuous(limits=c(-5,5),breaks=seq(-5,5,by=1))+
+  scale_y_continuous(limits=c(-5,5),breaks=seq(-5,5,by=1))+
+  labs(x="Nutrient Component of TSI",y="Regional Component of TSI")+
+  theme_classic()+
+  theme(legend.position="top",
+        axis.text=element_text(size=12),
+        axis.line = element_line(size=1),
+        axis.ticks = element_line(size=1))
+plt
+
+pdf(file="figures/Nutrient vs Region w Case Study.pdf",
+    width=6,height=6,paper="letter",useDingbats = FALSE)
+plt
+dev.off()
+
+```
+
+# Compare 2010 and updated model fit
+
+```{r}
+# Note that these comparisons do not account for the scale parameter.
+# Comparisons in manuscript are of scaled parameter estimates.
+
+tmp <- abs(Coeff.Summary.update.L3Eco-Coeff.Summary.L3Eco)
+
+## Analysis of change in mean
+# Comparison of all parameters
+summary(tmp[,1])
+# Comparison of water quality parameters only
+summary(tmp[4:8,1])
+# Summary for regional coefficients
+summary(tmp[9:24,1])
+# Summary for cut points
+summary(tmp[1:3,1])
+
+## Analysis of change in standard deviation
+# Comparison of all parameters
+tmp <- 1-Coeff.Summary.update.L3Eco/Coeff.Summary.L3Eco
+
+summary(tmp[,2])
+# Comparison of water quality parameters only
+summary(tmp[4:8,2])
+# Summary for regional coefficients
+summary(tmp[9:24,2])
+# Summary for cut points
+summary(tmp[1:3,2])
+```
+
+# Compare POLR model and data graphically
+
+```{r}
+
+tmp <- calculate_ts_probabilities(Coeff.Summary.update.L3Eco,coastal$TSI) %>% 
+  cbind(select(coastal,TS_Chla_Q,TSI))
+
+tmp <- coastal
+# scale parameter to use with 2015 Update parameters
+scale2015 <- Coeff.Summary.update.L3Eco["s","mean"]
+tmp <- mutate(tmp,POLRclass = cut(TSI, 
+          breaks=c(-Inf,Coeff.Summary.update.L3Eco[1:3,1]/scale2015,Inf),labels=levels(TS_Chla_Q)))
+
+# Calculate prob of correct classification
+tmp$probCorrect[tmp$TS_Chla_Q=="Oligo"] <- tmp$pOligotrophic[tmp$TS_Chla_Q=="Oligo"]
+tmp$probCorrect[tmp$TS_Chla_Q=="Meso"] <- tmp$pMesotrophic[tmp$TS_Chla_Q=="Meso"]
+tmp$probCorrect[tmp$TS_Chla_Q=="Eu"] <- tmp$pEutrophic[tmp$TS_Chla_Q=="Eu"]
+tmp$probCorrect[tmp$TS_Chla_Q=="Hyper"] <- tmp$pHypereutrophic[tmp$TS_Chla_Q=="Hyper"]
+
+tmp$correct <- factor(tmp$TS_Chla_Q==tmp$POLRclass,labels=c("Does not Agree","Agrees"))
+
+jitterBarPlot <- ggplot(tmp,aes(x=TSI,y=TS_Chla_Q,color=POLRclass,shape=correct)) +
+  geom_jitter()+
+  theme_classic()+
+  geom_vline(xintercept=Coeff.Summary.update.L3Eco[1:3,1]/Coeff.Summary.update.L3Eco["s","mean"],linetype=2)+
+  scale_x_continuous(limits=c(-8,8),breaks=c(seq(-8,8,by=1)))+
+  scale_color_brewer(name="Trophic Class", palette="Set2") +
+  scale_shape_manual(values=c(1,19))+
+  labs(x="",y="")
+
+dataPlot <- ggplot(tmp,aes(x=TSI,y=probCorrect,color=TS_Chla_Q,shape=correct))+
+  geom_jitter(size=1,height=0.04,width=0.04) +
+  scale_x_continuous(limits=c(-8,8),breaks=c(seq(-8,8,by=1)))+
+  geom_vline(xintercept=Coeff.Summary.update.L3Eco[1:3,1],linetype=2)+
+  scale_shape_manual(values=c(1,19))+
+  scale_color_brewer(name="TS_Chla_Q", palette="Set2") +
+  theme_classic()+
+  theme(legend.position="top",legend.title=element_blank())+
+  labs(x="",y="")
+dataPlot
+
+nl <- theme(legend.position="none")
+# Note that this figure does not appear in the manuscript.
+pdf(file="figures/ProbPlotsStacked.withData.pdf",width=6,height=9,paper="letter",useDingbats = FALSE)
+  grid.arrange(POLR2010+nl,POLR2015+nl,dataPlot+nl)
+dev.off()
+
+# this figure is used in the paper (Fig 3)
+nl <- theme(legend.position="none")
+pdf(file="figures/ProbPlotsStacked.wBar.withData.pdf",width=6,height=9,paper="letter",useDingbats = FALSE)
+  grid.arrange(POLR2010+nl,POLR2015+nl,jitterBarPlot+nl)
+dev.off()
+  grid.arrange(POLR2010+nl,POLR2015+nl,jitterBarPlot+nl)
+
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

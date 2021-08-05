@@ -26,7 +26,6 @@ library(quantreg)
 library(wesanderson)
 library(NADA)
 
-
 select <- dplyr::select
 
 source("functions/coastal_tsi_functions.R")
@@ -50,7 +49,6 @@ bh_station_locations <- read.csv("raw/boston_harbor_sampling_data_locations.csv"
          STUDY_ID=="BHWQM") %>% 
   st_as_sf(., coords = c('Longitude', 'Latitude'), crs = 4326) %>% 
   mutate(type="Nutrients")
-
 
 # note: stations with letters in them aren't needed, so doesn't matter that they can't be coerced 
 # to numeric.
@@ -94,9 +92,6 @@ mapshot(m, file = "figures/Stations.jpg", vheight=350, vwidth=350, zoom=3, remov
 # Content type 'application/octet-stream' length 18193653 bytes (17.4 MB)
 # downloaded 17.4 MB
 # phantomjs has been installed to C:\Users\jhagy\AppData\Roaming\PhantomJS
-
-# did not ultimately use this for map
-# bh_shorelines <- st_read("C:/Users/jhagy/OneDrive - Environmental Protection Agency #(EPA)/jim/GIS/bostonharbor/High Water Shorelines (1800s-2009)/
 
 ```
 # Make a map using ggmap
@@ -433,17 +428,14 @@ bh_polr$TN.Flag[bh_polr$TDN.Flag=="<" & bh_polr$PN.Flag=="<" ] <- "<<"
 bh_polr$TP.Flag[bh_polr$TDP.Flag=="<" | bh_polr$PP.Flag=="<"] <- "<"
 bh_polr$TP.Flag[bh_polr$TDP.Flag=="<" & bh_polr$PP.Flag=="<"] <- "<<"
 
-
-
-
 # Retain only the POLR variables and associated flags
 polr.variables <- c("TN","TP","DIN","DIP","Secchi.Depth.m","Chla")
 polr.flags <- c("TN.Flag","TP.Flag","DIN.Flag","DIP.Flag")
 bh_polr <- bh_polr %>% 
   select(Station.ID,TimeStamp,all_of(polr.variables),all_of(polr.flags))
 
-if (!file.exists("data/Boston_POLR_Data(7-27-21).Rdata")) {
-save(bh_polr,file="data/Boston_POLR_Data(7-27-21).Rdata")
+if (!file.exists("data/Boston_POLR_Data.Rdata")) {
+save(bh_polr,file="data/Boston_POLR_Data.Rdata")
 }
 ```
 
@@ -451,7 +443,7 @@ save(bh_polr,file="data/Boston_POLR_Data(7-27-21).Rdata")
 
 ```{r}
 
-load("data/Boston_POLR_Data(7-27-21).Rdata")
+load("data/Boston_POLR_Data.Rdata")
 
 tmp <- bh_polr %>% 
   filter(Station.ID %in% c(138,140)) %>% 
@@ -511,10 +503,10 @@ rm(tmp)
 
 ```{r}
 
-load("data/Bayesian_POLR_2015update.(7-22-21).Rdata")
-load("data/Bayesian_POLR_2010.(7-22-21).Rdata")
+load("data/Bayesian_POLR_2015update.Rdata")
+load("data/Bayesian_POLR_2010.Rdata")
 load("data/centeringParameters.Rdata")
-load("data/Boston_POLR_Data(7-27-21).Rdata")
+load("data/Boston_POLR_Data.Rdata")
 
 if (!exists("calculate_ts_probabilities")) {
 source("functions/coastal_tsi_functions.R")  
@@ -587,15 +579,15 @@ bh$pMesotrophic <- tmp$pMesotrophic
 bh$pEutrophic <- tmp$pEutrophic
 bh$Hypertrophic <- tmp$pHypertrophic
 
-save(bh,file="data/BostonHarborTSI (7-30-21).Rdata")
-write.csv(bh,file="outputs/BH_TSI (7-30-21).csv",row.names=FALSE)
+save(bh,file="data/BostonHarborTSI.Rdata")
+write.csv(bh,file="outputs/BH_TSI.csv",row.names=FALSE)
 ```
 
 # Evaluate agreement between TSI and Chla
 
 ```{r}
 
-load("data/BostonHarborTSI (7-30-21).Rdata")
+load("data/BostonHarborTSI.Rdata")
 
 regionEval <- build_region_matrix(bh,"levelIII")
 Pred.CatAll <- findPredictedClass.TSI(bh,Coeff.Summary.update.L3Eco)
@@ -702,7 +694,7 @@ chla_Qgam_plt <- ggplot()+
      labs(x="",y="µg L-1")
 chla_Qgam_plt  
 
-pdf(file="figures/QGAM Chla figure(7-27-21).pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
+pdf(file="figures/QGAM Chla figure.pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
   chla_Qgam_plt +
       labs(x="",y="")+
       theme(
@@ -758,7 +750,7 @@ TSI_Qgam_plt <- ggplot()+
 
 TSI_Qgam_plt
 
-pdf(file="figures/QGAM TSI figure(8-3-21).pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
+pdf(file="figures/QGAM TSI figure.pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
   TSI_Qgam_plt+
       labs(x="",y="")+
       theme(
@@ -767,104 +759,3 @@ pdf(file="figures/QGAM TSI figure(8-3-21).pdf",width=4,height=4,useDingbats = FA
         axis.ticks = element_line(size=1))
 dev.off()
 ```
-
-# Q-Q plots
-```{r}
-
-load("coastalTSI.Rdata")
-load("BostonHarborTSI.Rdata")
-load("Bayesian_POLR_2015update.(5-10-20).Rdata")
-
-
-probs <- seq(0.05,0.95,by=0.05)
-
-q.NCCA.TSI <- quantile(coastalTSI$TSI,probs=probs)
-q.NE.TSI <- quantile(coastalTSI$TSI[coastalTSI$levelIII=="NORTHEASTERN COASTAL ZONE"],probs=probs)
-q.BH.TSI <- quantile(bh$TSI,probs=probs)
-pal <- wes_palette("Zissou1", 10, type = "continuous")
-
-data.frame(q.NCCA.TSI,q.BH.TSI,q.NE.TSI,Quantile=probs) %>% 
-  ggplot() +
-  geom_point(aes(x=q.NE.TSI,y=q.BH.TSI,color=Quantile),shape=17)+
-  geom_point(aes(x=q.NCCA.TSI,y=q.BH.TSI,color=Quantile)) +
-  scale_color_gradientn(colours = pal)+
-  scale_x_continuous(limits=c(-400,400))+
-  scale_y_continuous(limits=c(-400,400))+
-  geom_abline(scope=1,intercept=0, linetype=2)+
-  geom_vline(aes(xintercept=Coeff.Summary.update.L3Eco[1,"mean"]),color="grey")+
-  geom_vline(aes(xintercept=Coeff.Summary.update.L3Eco[2,"mean"]),color="grey")+
-  geom_vline(aes(xintercept=Coeff.Summary.update.L3Eco[3,"mean"]),color="grey")+
-  geom_hline(aes(yintercept=Coeff.Summary.update.L3Eco[1,"mean"]),color="grey")+
-  geom_hline(aes(yintercept=Coeff.Summary.update.L3Eco[2,"mean"]),color="grey")+
-  geom_hline(aes(yintercept=Coeff.Summary.update.L3Eco[3,"mean"]),color="grey")+
-  theme_classic()+
-  labs(y="Boston Harbor TSI",x="NCCA or Northeast TSI")
-```
-
-# Q-Q Plot of TSI and Chlorophyll-a by period
-This is an interesting plot illustrating how TSI related to Chlorophyll-a
-in each 5 year period.  Chlorophyll-a levels associated with the highest TSI
-values decreased a lot from 1995-2000, falling more inline with the 
-relationship defined by the NCCA.
-
-In other words, Chlorophyll-a during times of higher than normal nutrient levels was higher than expected, and fell to levels more consistent with 
-the large scale relationship.
-
-This plot is not included in the manuscript.
-
-```{r}
-probs <- seq(0.05,0.95,by=0.05)
-
-yrs <- c(1995,2000)
-q.BH.TSI <- quantile(bh$TSI[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
-q.BH.Chla <- quantile(bh$CHLA..ug.L.[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
-interval <- "1995-2000"
-tmp <- data.frame(q.BH.TSI,q.BH.Chla,Quantile=probs,interval=interval)
-
-yrs <- c(2000,2005)
-q.BH.TSI <- quantile(bh$TSI[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
-q.BH.Chla <- quantile(bh$CHLA..ug.L.[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
-interval <- "2000-2005"
-tmp <- rbind(tmp,data.frame(q.BH.TSI,q.BH.Chla,Quantile=probs,interval=interval))
-
-yrs <- c(2005,2010)
-q.BH.TSI <- quantile(bh$TSI[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
-q.BH.Chla <- quantile(bh$CHLA..ug.L.[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
-interval <- "2005-2010"
-tmp <- rbind(tmp,data.frame(q.BH.TSI,q.BH.Chla,Quantile=probs,interval=interval))
-
-yrs <- c(2010,2015)
-q.BH.TSI <- quantile(bh$TSI[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
-q.BH.Chla <- quantile(bh$CHLA..ug.L.[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
-interval <- "2010-2015"
-tmp <- rbind(tmp,data.frame(q.BH.TSI,q.BH.Chla,Quantile=probs,interval=interval))
-
-yrs <- c(2015,2019)
-q.BH.TSI <- quantile(bh$TSI[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
-q.BH.Chla <- quantile(bh$CHLA..ug.L.[between(year(bh$TimeStamp),yrs[1],yrs[2])],probs=probs)
-interval <- "2015-2019"
-tmp <- rbind(tmp,data.frame(q.BH.TSI,q.BH.Chla,Quantile=probs,interval=interval))
-
-q.BH.TSI <- quantile(coastalTSI$TSI,probs=probs)
-q.BH.Chla <- quantile(coastalTSI$CHLA..ug.L.,probs=probs)
-interval <- "NCCA"
-tmp <- rbind(tmp,data.frame(q.BH.TSI,q.BH.Chla,Quantile=probs,interval=interval))
-
-pal <- brewer.pal(6,"Set2")
-
-ggplot(tmp,aes(x=q.BH.TSI,y=q.BH.Chla,color=interval))+
-  geom_point()+
-  geom_smooth(se=FALSE)+
-  #scale_y_log10(breaks=c(2.5,5,10,20))+
-  scale_color_manual(values=pal)+
-  #scale_x_continuous(limits=c(-250,50))+
-  geom_vline(aes(xintercept=Coeff.Summary.update.L3Eco[1,"mean"]),color="grey")+
-  #geom_vline(aes(xintercept=Coeff.Summary.update.L3Eco[2,"mean"]),color="grey")+
-  #geom_hline(aes(yintercept=5),color="grey")+
-  #geom_hline(aes(yintercept=10),color="grey")+
-  #geom_hline(aes(yintercept=20),color="grey")+
-  theme_classic()+
-  labs(x="Trophic State Index",y="Chlorophyll-a (µg/L",color="")
-
-```
-

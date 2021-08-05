@@ -1,0 +1,91 @@
+---
+title: "Demonstrate how fill-in imputation using ROS works"
+author: "J. Hagy"
+date: "7/21/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+## Demonstrate fill-in methods using ROS in NADA
+
+ros is an implementation of a Regression on Order Statistics (ROS) designed 
+for multiply censored analytical chemistry data.
+The method assumes data contains zero to many left-censored 
+less-than) values.
+
+ros is part of the NADA package
+
+Lopaka Lee (2020). NADA: Nondetects and Data Analysis for Environmental Data. R package version 1.6-1.1.
+https://CRAN.R-project.org/package=NADA
+
+```{r}
+
+# Use the NADA package ... developed with Denis Helsel
+library(NADA)
+library(tidyverse)
+
+```
+
+# Create a log-normally distributed random variable
+
+You can also embed plots, for example:
+
+```{r}
+# Create log-normally distributed data data set and proposed censoring limit
+set.seed(5420)
+myRndData <- exp(sort(rnorm(1000)))
+
+# define values less than 0.2 as being "below detection limit"
+censored <- myRndData<0.2
+summary(censored)
+# about 6.1% of the data are censored.
+
+# put the data in a data frame and graph is, showing the data
+# that I'm going to define as <MDL
+tmp <- data.frame(x=myRndData,censored=censored)
+
+ggplot(tmp,aes(x=x,fill=censored))+
+  geom_histogram(binwidth=0.1,boundary=1)+
+  scale_x_log10()+
+  ggtitle("Distribution Before Censoring")
+
+```
+
+# Censor the data 
+Now actually replace data below with MDL with the MDL and plot showing 
+the left-censored distribution
+
+```{r}
+# Replace the data below 0.2 with 0.2  
+tmp$x_cens <- pmax(tmp$x,0.2)
+
+# now there are more numbers in the lowest bin, because they are all the 
+# censored values
+ggplot(tmp,aes(x=x_cens,fill=censored))+
+  geom_histogram(binwidth=0.1,boundary=1)+
+  scale_x_log10()+
+  ggtitle("Distribution After Censoring")
+
+```
+# Use ROS 
+ROS will fill-in the censored tail of the distribution 
+with imputed values.
+```{r}
+
+# use regression on order statistics (ROS) to fill-in
+# the distribution of values in the left tail to replace
+# the values that are censored.  
+myros = ros(tmp$x_cens, tmp$censored) 
+myros.df <- as.data.frame(myros)
+
+ggplot(myros.df,aes(x=modeled,fill=censored))+
+  geom_histogram(binwidth=0.1,boundary=1)+
+  scale_x_log10()+
+  ggtitle("Distribution with Imputed values in the left tail")
+
+```
+

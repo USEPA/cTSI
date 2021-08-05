@@ -1,7 +1,7 @@
 ---
 title: "Coastal_TS.Rmd"
 author: "J. Hagy"
-date: "June 10, 2021"
+date: "August 5 10, 2021"
 output: pdf_document
 ---
 # 1. Setup
@@ -27,7 +27,6 @@ for(i in cran_no){
 
 # Library the packages
 lapply(pkgs, library, character.only = T)  
-
 
 # load functions used for this project
 source("functions/coastal_tsi_functions.R")
@@ -82,7 +81,10 @@ mdl["DIP"] <- 0.0025
 
 evaluateNonDetects(coastal,mdl)
 
-# Replace the non-detects reported as zero with 2010 NCCA MDL
+# Set up data set for processing using Regression on Order Statistics
+# approach.
+
+# First replace the non-detects reported as zero with 2010 NCCA MDL
 # set flag indicating that value is censored to TRUE
 # there are very few non-detects, so we argue that a more 
 # rigorous approach is not required
@@ -596,8 +598,8 @@ Coeff.Summary.L3Eco <- build_coefficient_summary(CodaOne_L3Eco)
 print(xtable(Coeff.Summary.L3Eco, floating=FALSE))
 
 # Save the coefficient summary and data if it has not been previously saved
-if (!file.exists("data/Bayesian_POLR_2010.(7-22-21).Rdata")) {
-  save(Coeff.Summary.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2010.(7-22-21).Rdata")
+if (!file.exists("data/Bayesian_POLR_2010.Rdata")) {
+  save(Coeff.Summary.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2010.Rdata")
 }
 
 ```
@@ -677,7 +679,7 @@ plt <- generate_graphic_model(Model,Coeff.Summary.L3Eco,"levelIII") +
 
 plt
 
-pdf("figures/POLR_Prob_2010L3Eco.(7-22-21).pdf", width=6, height=6, paper="letter")
+pdf("figures/POLR_Prob_2010L3Eco.pdf", width=6, height=6, paper="letter")
   print(plt)
 dev.off()
 
@@ -750,7 +752,7 @@ coastal_jags_update_L3Eco <- jags.model('R/coastal_jags.R',data = DataList
 proc.time() - ptm
 
 if (!file.exists("data/coastal_jags_update_L3Eco.Rdata")) {
-  save(coastal_jags_update_L3Eco,file="coastal_jags_update_L3Eco.Rdata")
+  save(coastal_jags_update_L3Eco,file="data/coastal_jags_update_L3Eco.Rdata")
 }
 ```
 
@@ -767,7 +769,7 @@ ptm <- proc.time()
 coda_update_L3Eco <- sample_posterior_distribution(coastal_jags_update_L3Eco,parameters,iterations=10000)
 proc.time() - ptm
 
-save(coda_update_L3Eco,file="coda_update_L3Eco.(7-22-21).Rdata")
+save(coda_update_L3Eco,file="data/coda_update_L3Eco.Rdata")
 
 ```
 #15a. Evaluate 2015 model update and generate parameter summary
@@ -808,7 +810,7 @@ xtable(Coeff.Summary.update.L3Eco, floating=FALSE)
 
 # Save the coefficient summary and data
 if (!file.exists("data/Bayesian_POLR_2015update.(7-22-21).Rdata")) {
-  save(Coeff.Summary.update.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2015update.(7-22-21).Rdata")
+  save(Coeff.Summary.update.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2015update.Rdata")
 }
 
 ```
@@ -818,10 +820,10 @@ And evaluate predictions from 2015 Update model
 
 # Load the parameter summaries if they do not exist
 if (!exists("Coeff.Summary.L3Eco")) {
-  load("data/Bayesian_POLR_2010.(7-22-21).Rdata")
+  load("data/Bayesian_POLR_2010.Rdata")
 }
 if (!exists("Coeff.Summary.update.L3Eco")) {
-  load("data/Bayesian_POLR_2015update.(7-22-21).Rdata")
+  load("data/Bayesian_POLR_2015update.Rdata")
 }
 
 # output POLR model parameters 
@@ -907,7 +909,7 @@ plt <- generate_graphic_model(Model,Coeff.Summary.update.L3Eco,"levelIII")+
     annotate("text",x=labelpos[4],y=0.65,label="Hypertrophic")
 plt
 
-pdf("figures/POLR_Prob_2015L3Eco.(7-23-21).pdf", width=6, height=6, paper="letter")
+pdf("figures/POLR_Prob_2015L3Eco.pdf", width=6, height=6, paper="letter")
    print(plt)
 invisible(dev.off())
 
