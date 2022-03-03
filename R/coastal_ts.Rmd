@@ -37,7 +37,7 @@ select <- dplyr::select
 
 ```
 # 2. Read in the NCA data from csv files
-```{r echo=TRUE}
+```{r eval=FALSE, include=FALSE}
 
 # Read in from CSV file
 inFile <- "raw/CoastalWQ_20200831.csv"
@@ -68,7 +68,7 @@ coastal <- mutate(coastal,TS_Chla_Q=cut(CHLA..ug.L.,
 
 # Model non-detects using regression on order statistics
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 
 # What percentage of non-detects are there for each variable?
 # there is 0 to 2.8% non detects.
@@ -156,7 +156,7 @@ ggplot(coastal,aes(x=DIP..mgP.L.,fill=DIP.censored))+
 
 # Assemble final data and save
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 
 # Define lists of predictors
 nutrientPredictors <- c("TN..mgN.L.","DIN..mgN.L.","TP..mgP.L.","DIP..mgP.L.","DIN.DIP..Molar.","TN.TP..Molar.","SECCHI_MEAN..m.")
@@ -197,12 +197,13 @@ tmp <- select(coastal,SAMPYEAR,levelIII,TS_Chla_Q) %>%
               pivot_wider(names_from=c("SAMPYEAR","TS_Chla_Q"),
                           values_from="n",values_fill=0)
 tmp
-write.csv(tmp,file="outputs/ObservationsByEcoregionTS.csv")
+
+#write.csv(tmp,file="outputs/ObservationsByEcoregionTS.csv")
 # note that there are no observations in WALLAMETTE VALLEY in 2015.
 
 ```
 # Prepare descriptive statistics and graphics for data from the two years
-```{r}
+```{r eval=FALSE, include=FALSE}
 
 # Graph the relationship between TN and Log(Chlorophyll-a) by ecoregion
 coastal %>% mutate(Year=factor(SAMPYEAR)) %>% 
@@ -525,15 +526,17 @@ jags_run_parameters("final")
 ptm <- proc.time()
 # jags.model is used to create an object representing a Bayesian graphical model, 
 # specified with a BUGS-language description of the prior distribution, and a set of data.
-coastal_jags_L3Eco <- jags.model('R/coastal_jags.R',data = DataList 
+#coastal_jags_L3Eco <- jags.model('R/coastal_jags.R',data = DataList 
+#                           , inits, n.chains = nChains, n.adapt = #adaptSteps)
+coastal_jags_L3Eco <- jags.model('R/coastal_jags_2022_03_01.R',data = DataList 
                            , inits, n.chains = nChains, n.adapt = adaptSteps)
 
 # Stop the clock
 proc.time() - ptm
 
 # if the graphic model object has not been saved already, then save it
-if (!file.exists("data/coastal_jags_L3Eco.Rdata")) {
-  save(coastal_jags_L3Eco,file="data/coastal_jags_L3Eco.Rdata")
+if (!file.exists("data/coastal_jags_L3Eco(2022_03_01).Rdata")) {
+  save(coastal_jags_L3Eco,file="data/coastal_jags_L3Eco(2022_03_01).Rdata")
 }
 
 ```
@@ -544,7 +547,7 @@ if (!file.exists("data/coastal_jags_L3Eco.Rdata")) {
 
 #if the JAGS object does not exist, then load it from the saved file
 if (!exists("coastal_jags_L3Eco")) {
-  load("data/coastal_jags_L3Eco.Rdata")  
+  load("data/coastal_jags_L3Eco(2022_03_01).Rdata")  
 }
 
 # Sample the 2010 model with Level III ecoregions
@@ -553,8 +556,8 @@ coastal_coda_L3Eco <- sample_posterior_distribution(coastal_jags_L3Eco,parameter
 proc.time() - ptm
 
 # if sampled object has not been saved, then save it
-if (!file.exists("data/coastal_coda2010_L3Eco.Rdata")) {
-  save(coastal_coda_L3Eco,file="data/coastal_coda2010_L3Eco.Rdata")  
+if (!file.exists("data/coastal_coda2010_L3Eco(2022_03_01).Rdata")) {
+  save(coastal_coda_L3Eco,file="data/coastal_coda2010_L3Eco(2022_03_01).Rdata")  
 }
 
 ```
@@ -564,22 +567,8 @@ Use level III ecoregions, create coefficient summary object
 
 # if the sampled object does not exist, load it from stored version
 if (!exists("coastal_coda2010_L3Eco")) {
-  load("coastal_coda2010_L3Eco.Rdata")  
+  load("data/coastal_coda2010_L3Eco(2022_03_01).Rdata")  
 }
-
-# Plot posterior distribution of parameters, including
-# cut points, alphas for WQ variables and 
-# alphas for subregions
-# There are 16 Level III ecoregions
-plot(coastal_coda_L3Eco[,1:3]) #cut points
-plot(coastal_coda_L3Eco[,4:6]) # DIN, DIP, N
-plot(coastal_coda_L3Eco[,7:9]) # P, SD, SubR1
-plot(coastal_coda_L3Eco[,10:12]) # SubR2,3,4
-plot(coastal_coda_L3Eco[,13:15]) # 5,6,7
-plot(coastal_coda_L3Eco[,16:18]) # 8,9,10
-plot(coastal_coda_L3Eco[,19:21]) # 11,12,13
-plot(coastal_coda_L3Eco[,22:24]) # 14,15,16
-plot(coastal_coda_L3Eco[,25]) # s
 
 # Table of Parameter distribution statistics
 tmp <- cbind(summary(coastal_coda_L3Eco)$quantiles, summary(coastal_coda_L3Eco)$statistics[,2])
@@ -595,41 +584,54 @@ MCMC.Coastal.L3Eco <- as.mcmc(CodaOne_L3Eco)
 
 # Build a summary of the coefficients
 Coeff.Summary.L3Eco <- build_coefficient_summary(CodaOne_L3Eco)
+
+# Add log stats to Coeff.Summary.L3Eco
+Coeff.Summary.L3Eco <- rbind(
+  Coeff.Summary.L3Eco,
+  c(
+  mean(log(CodaOne_L3Eco[,25])),
+  sd(log(CodaOne_L3Eco[,25])),
+  quantile(log(CodaOne_L3Eco[,25]),probs=c(0.025)),
+  quantile(log(CodaOne_L3Eco[,25]),probs=c(0.975))
+  )
+)
+rownames(Coeff.Summary.L3Eco)[26] <- "log_s" 
+
 print(xtable(Coeff.Summary.L3Eco, floating=FALSE))
 
 # Save the coefficient summary and data if it has not been previously saved
-if (!file.exists("data/Bayesian_POLR_2010.Rdata")) {
-  save(Coeff.Summary.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2010.Rdata")
+if (!file.exists("data/Bayesian_POLR_2010(2022_03_01).Rdata")) {
+  save(Coeff.Summary.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2010(2022_03_01).Rdata")
 }
+
+write.csv(Coeff.Summary.L3Eco,file="Coeff.Summary(2022_03_01).csv")
 
 ```
 # Evaluate 2010 model
 ```{r}
 
 if (!exists("Coeff.Summary.L3Eco")) {
-   load("data/Bayesian_POLR_2010.(7-22-21).Rdata")
+   load("data/Bayesian_POLR_2010(2022_03_01).Rdata")
 }
 if (!exists("centeringParameters")) {
    load("data/centeringParameters.Rdata")
 }
 
 # Build Coefficient Matrix
-Alpha <- build_coefficient_matrix(Coeff.Summary.L3Eco)
+Alpha <- build_coefficient_matrix(Coeff.Summary.L3Eco[1:25,])
 # build region matrix for Evaluation Data
 regionMatrix <- build_region_matrix(Evaluation,"levelIII")
 # calculate centered parameters, and TSI
 centerParameters(Evaluation,centeringParameters)
 X <- cbind(SDD.C, TN.C, TP.C, DIN.C, DIP.C, regionMatrix)
-Alpha <- build_coefficient_matrix(Coeff.Summary.L3Eco)
-TSI <- X %*% Alpha[,"mean"]
+TSI <- (X %*% Alpha[,"mean"])/Coeff.Summary.L3Eco["s","mean"]
 Evaluation$TSI <- TSI
 
 # Calculate Predicted Classes and compare with observed classes
-Pred.CatAll <- findPredictedClass.TSI(Evaluation,Coeff.Summary.L3Eco)
+Pred.CatAll <- findPredictedClass.TSI(Evaluation,Coeff.Summary.L3Eco[1:25,])
 True.CatAll <- Evaluation[, "TS_Chla_Q"]
 CM.TS.Multilevel <- confusionMatrix(Pred.CatAll, True.CatAll)
 CM.TS.Multilevel
-
 
 data.frame(
   param=rownames(Coeff.Summary.L3Eco),
@@ -668,7 +670,7 @@ labelpos <- c((-400+Coeff.Summary.L3Eco["C[1]","mean"])/2,
                Coeff.Summary.L3Eco["C[3]","mean"])/2,
               (400+Coeff.Summary.L3Eco["C[3]","mean"])/2)
 
-plt <- generate_graphic_model(Model,Coeff.Summary.L3Eco,"levelIII") +
+plt <- generate_graphic_model(Model,Coeff.Summary.L3Eco[1:25,],"levelIII") +
   scale_x_continuous(limits=c(-400,400))+
   ggtitle("Trophic State Classification - 2010 Data using Level III Ecoregions",
               subtitle="2010 Data using Uninformed Prior")+
@@ -679,15 +681,64 @@ plt <- generate_graphic_model(Model,Coeff.Summary.L3Eco,"levelIII") +
 
 plt
 
-pdf("figures/POLR_Prob_2010L3Eco.pdf", width=6, height=6, paper="letter")
+pdf("figures/POLR_Prob_2010L3Eco(2022_03_01).pdf", width=6, height=6, paper="letter")
   print(plt)
+dev.off()
+
+data.frame(s=CodaOne_L3Eco[,25]) %>% 
+  ggplot(aes(x=log(s)))+
+  geom_histogram()+
+  theme_classic()
+
+# Make plots showing posterior distributions from 2010.
+
+pdf("figures/Posterior_Probability_Distributions_2010_(2022_03_01).pdf", width=6, height=6, paper="letter")
+
+data.frame(CodaOne_L3Eco) %>% 
+  pivot_longer(cols=everything(),names_to="Parameter",values_to = "Vals") %>% 
+  ggplot(aes(x=Vals))+
+    facet_wrap(~Parameter)+
+    geom_histogram(binwidth = 10)+
+    scale_x_continuous(limits = c(-500,500))+
+    theme(panel.grid=element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank())+
+    labs(x="Parameter Value",y="Frequency")+
+    ggtitle("Posterior Distribution of Parameter Estimates",
+            subtitle="2010 POLR Model")
+
+dev.off()
+
+pdf("figures/Posterior_S_qnorm_(2022_03_01).pdf", width=6, height=6, paper="letter")
+
+qqnorm(CodaOne_L3Eco[,25])
+qqline(CodaOne_L3Eco[,25])
+
+qqnorm(log(CodaOne_L3Eco[,25]))
+qqline(log(CodaOne_L3Eco[,25]))
+
+dev.off()
+
+pdf("figures/Posterior_Probability_Trace_2010_(2022_03_01).pdf", width=6, height=6, paper="letter")
+data.frame(CodaOne_L3Eco) %>% 
+  mutate(x=row_number()) %>% 
+  pivot_longer(cols=!starts_with("x"),names_to="Parameter",values_to = "Vals") %>% 
+  ggplot(aes(x=x,y=Vals))+
+    facet_wrap(~Parameter)+
+    geom_line()+
+    theme(panel.grid=element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank())+
+    labs(x="",y="Value")+
+    ggtitle("Sampling Trace for Parameter Estimates",
+            subtitle="2010 POLR Model")
 dev.off()
 
 ```
 
 #14a. Process Bayesian model update using 2015 data and Level III ecoregions
 
-```{r include=FALSE}
+```{r eval=FALSE, include=FALSE}
 
 # Removing the missing values:
 coastal2015 <- coastal2015[!is.na(coastal2015[,"SECCHI_MEAN..m."]) 
@@ -714,6 +765,9 @@ for (k in 1:3){
 cutpt.inits <- sort(cutpt.inits)
 inits <- function () {list("cutpt_raw" = cutpt.inits)}
 
+if (!exists("centeringParameters")) {
+  load("data/centeringParameters.Rdata")
+}
 centerParameters(Model,centeringParameters)
 
 # Create list for input to JAGS
@@ -743,54 +797,44 @@ jags_run_parameters("final")
 
 ```
 #14b. Process Bayesian model update using 2015 data and Level III ecoregions
-```{r echo=TRUE}
+```{r eval=FALSE, include=FALSE}
 # Start the clock!
 ptm <- proc.time()
-coastal_jags_update_L3Eco <- jags.model('R/coastal_jags.R',data = DataList 
+coastal_jags_update_L3Eco <- jags.model('R/coastal_jags_update.R',data = DataList 
                            , inits, n.chains = nChains, n.adapt = adaptSteps)
 # Stop the clock
 proc.time() - ptm
 
-if (!file.exists("data/coastal_jags_update_L3Eco.Rdata")) {
-  save(coastal_jags_update_L3Eco,file="data/coastal_jags_update_L3Eco.Rdata")
+
+if (!file.exists("data/coastal_jags_update_L3Eco(2022_03_01).Rdata")) {
+  save(coastal_jags_update_L3Eco,file="data/coastal_jags_update_L3Eco(2022_03_01).Rdata")
 }
 ```
 
 #15a. Sample posterior distribution - 2015 model update using Level III ecoregions
 
-```{r Sample2015Distribution, echo=TRUE}
+```{r Sample2015Distribution, eval=FALSE, include=FALSE}
 
 if (!exists("coastal_jags_update_L3Eco")) {
-   load("data/coastal_jags_update_L3Eco.Rdata")  
+   load("data/coastal_jags_update_L3Eco(2022_03_01).Rdata")  
 }
+
 
 # Sample the 2015 model with subregions
 ptm <- proc.time()
 coda_update_L3Eco <- sample_posterior_distribution(coastal_jags_update_L3Eco,parameters,iterations=10000)
 proc.time() - ptm
 
-save(coda_update_L3Eco,file="data/coda_update_L3Eco.Rdata")
+save(coda_update_L3Eco,file="data/coda_update_L3Eco(2022_03_01).Rdata")
+#save(coda_update_L3Eco,file="data/coda_update_L3Eco.Rdata")
 
 ```
 #15a. Evaluate 2015 model update and generate parameter summary
 ```{r, results="asis"}
 
 if (!exists("coda_update_L3Eco")) {
- load("data/coda_update_L3Eco.Rdata")  
+ load("data/coda_update_L3Eco(2022_03_01).Rdata")  
 }
-
-#Plot
-#Plotting Level III Ecoregion distributions
-#There are 16 Level III ecoregions
-plot(coda_update_L3Eco[,1:3]) #cut points
-plot(coda_update_L3Eco[,4:6]) # DIN, DIP, N
-plot(coda_update_L3Eco[,7:9]) # P, SD, SubR1
-plot(coda_update_L3Eco[,10:12]) # SubR2,3,4
-plot(coda_update_L3Eco[,13:15]) # 5,6,7
-plot(coda_update_L3Eco[,16:18]) # 8,9,10
-plot(coda_update_L3Eco[,19:21]) # 11,12,13
-plot(coda_update_L3Eco[,22:24]) # 14,15,16
-plot(coda_update_L3Eco[,25]) # s
 
 # Table of Parameter distribution statistics
 tmp <- cbind(summary(coda_update_L3Eco)$quantiles, summary(coda_update_L3Eco)$statistics[,2])
@@ -799,6 +843,24 @@ xtable(tmp, floating=FALSE)
 
 # Combine Chains
 CodaOne_update_L3Eco <- combine_chains(coda_update_L3Eco,1)
+
+pdf("figures/Posterior_Probability_Distributions_2015(2022_03_01).pdf", width=6, height=6, paper="letter")
+
+data.frame(CodaOne_update_L3Eco) %>% 
+  pivot_longer(cols=everything(),names_to="Parameter",values_to = "Vals") %>% 
+  ggplot(aes(x=Vals))+
+    facet_wrap(~Parameter)+
+    geom_histogram(binwidth = 10)+
+    scale_x_continuous(limits = c(-500,500))+
+    theme(panel.grid=element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank())+
+    labs(x="Parameter Value",y="Frequency")+
+    ggtitle("Posterior Distribution of Parameter Estimates",
+            subtitle="2015 POLR Model")
+
+dev.off()
+
 
 # coastal_coda is a MCMC.list object  coastal_coda[[i]] is a MCMC object.
 # simCodaone.Coda.Coastal is a matrix, so needs to be coerced back to a MCMC object.
@@ -809,34 +871,36 @@ Coeff.Summary.update.L3Eco <- build_coefficient_summary(CodaOne_update_L3Eco)
 xtable(Coeff.Summary.update.L3Eco, floating=FALSE)
 
 # Save the coefficient summary and data
-if (!file.exists("data/Bayesian_POLR_2015update.(7-22-21).Rdata")) {
-  save(Coeff.Summary.update.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2015update.Rdata")
+if (!file.exists("data/Bayesian_POLR_2015update(2022_03_01).Rdata")) {
+  save(Coeff.Summary.update.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2015update(2022_03_01).Rdata")
 }
+
+write.csv(Coeff.Summary.update.L3Eco,file="Coeff.Summary.Update(2022_03_01).csv")
 
 ```
 # Compare Parameters from uninformed (2010) and informed models (2015)
 And evaluate predictions from 2015 Update model
-```{r}
+```{r eval=FALSE, include=FALSE}
 
 # Load the parameter summaries if they do not exist
 if (!exists("Coeff.Summary.L3Eco")) {
-  load("data/Bayesian_POLR_2010.Rdata")
+  load("data/Bayesian_POLR_2010(2022_03_01).Rdata")
 }
 if (!exists("Coeff.Summary.update.L3Eco")) {
-  load("data/Bayesian_POLR_2015update.Rdata")
+  load("data/Bayesian_POLR_2015update(2022_03_01).Rdata")
 }
 
 # output POLR model parameters 
-write.csv(cbind(Coeff.Summary.L3Eco,Coeff.Summary.update.L3Eco),
-          file="outputs/POLR_Model_Parameters.csv")
+write.csv(cbind(Coeff.Summary.L3Eco[1:25,],Coeff.Summary.update.L3Eco),
+          file="outputs/POLR_Model_Parameters(2022_03_01).csv")
 
 rbind(
 data.frame(
-  param=rownames(Coeff.Summary.L3Eco),
-  mean=Coeff.Summary.L3Eco[,"mean"],
-  sd=Coeff.Summary.L3Eco[,"sd"],
-  l95=Coeff.Summary.L3Eco[,"2.5%"],
-  u95=Coeff.Summary.L3Eco[,"97.5%"]) %>%
+  param=rownames(Coeff.Summary.L3Eco[1:25,]),
+  mean=Coeff.Summary.L3Eco[1:25,"mean"],
+  sd=Coeff.Summary.L3Eco[1:25,"sd"],
+  l95=Coeff.Summary.L3Eco[1:25,"2.5%"],
+  u95=Coeff.Summary.L3Eco[1:25,"97.5%"]) %>%
   mutate(fit="2010")
 ,
 data.frame(
@@ -863,8 +927,7 @@ regionMatrix <- build_region_matrix(Evaluation,"levelIII")
 # calculate centered parameters, and TSI
 centerParameters(Evaluation,centeringParameters)
 X <- cbind(SDD.C, TN.C, TP.C, DIN.C, DIP.C, regionMatrix)
-Alpha <- build_coefficient_matrix(Coeff.Summary.update.L3Eco)
-TSI <- X %*% Alpha[,"mean"]
+TSI <- (X %*% Alpha[,"mean"])/Coeff.Summary.update.L3Eco["s","mean"]
 Evaluation$TSI <- TSI
 
 # Calculate Predicted Classes and compare with observed classes
@@ -889,7 +952,7 @@ CM.TS.Multilevel$byClass[,"Balanced Accuracy"]
 
 #16. Graph 2015 model update using Level III ecoregions
 
-```{r echo=FALSE}
+```{r eval=FALSE, include=FALSE}
 
 labelpos <- c((-400+Coeff.Summary.update.L3Eco["C[1]","mean"])/2,
               (Coeff.Summary.update.L3Eco["C[1]","mean"]+

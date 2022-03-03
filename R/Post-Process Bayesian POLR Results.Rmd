@@ -1,7 +1,7 @@
 ---
 title: "Post-Process Bayesian POLR Results"
 author: "J. Hagy"
-date: "August 5, 2021"
+date: "August 5, 2021, Revised March 2, 2022 "
 output: pdf_document
 ---
 
@@ -18,8 +18,9 @@ source("functions/coastal_tsi_functions.R")
 ## Compare Parameter Estimates from 2010 and 2015 models
 
 ```{r}
-load("data/Bayesian_POLR_2015update.Rdata")
-load("data/Bayesian_POLR_2010.Rdata")
+
+load("data/Bayesian_POLR_2015update(2022_03_01).Rdata")
+load("data/Bayesian_POLR_2010(2022_03_01).Rdata")
 
 alphaOrder <- seq(c(1,16))
 geographicOrder <- c(5,13,14,1,6,10,3,2,4,16,12,8,7,9,11,15)
@@ -30,11 +31,11 @@ ecoRegionOrder <- data.frame(
 
 tmp <- rbind(
 data.frame(
-  param=rownames(Coeff.Summary.L3Eco),
-  mean=Coeff.Summary.L3Eco[,"mean"],
-  sd=Coeff.Summary.L3Eco[,"sd"],
-  l95=Coeff.Summary.L3Eco[,"2.5%"],
-  u95=Coeff.Summary.L3Eco[,"97.5%"]) %>%
+  param=rownames(Coeff.Summary.L3Eco[1:25,]),
+  mean=Coeff.Summary.L3Eco[1:25,"mean"],
+  sd=Coeff.Summary.L3Eco[1:25,"sd"],
+  l95=Coeff.Summary.L3Eco[1:25,"2.5%"],
+  u95=Coeff.Summary.L3Eco[1:25,"97.5%"]) %>%
   mutate(fit="Naive")
 ,
 data.frame(
@@ -59,7 +60,7 @@ lbl <- c("C1","C2","C3","TN","TP","DIN","DIP","SD",paste0(rep("ER",16),ecoregion
 tmp$param <- factor(tmp$param,levels=parms[order],labels=lbl)
 
 # write parameter values to csv file
-write.csv(tmp,file="outputs/POLR Model Parameters.csv")
+write.csv(tmp,file="outputs/POLR Model Parameters(2022_03_01).csv")
 
 fitScale <- tmp %>% 
   filter(param=="S") %>% 
@@ -90,7 +91,7 @@ plt <- ggplot(tmp2,aes(x=param,y=mean,fill=fit))+
 plt + ggtitle("Bayesian POLR Model Parameters",
           subtitle="Update using 2015 data; Errorbars show 95% confidence interval")
 
-pdf("figures/Parameter_Comparison.pdf",width=8,height = 4,paper="letter")
+pdf("figures/Parameter_Comparison(2022_03_02).pdf",width=8,height = 4,paper="letter")
    plt
 dev.off()
 
@@ -101,8 +102,8 @@ dev.off()
 
 ```{r pressure, echo=FALSE}
 
-load("data/Bayesian_POLR_2015update.Rdata")
-load("data/Bayesian_POLR_2010.Rdata")
+load("data/Bayesian_POLR_2015update(2022_03_01).Rdata")
+load("data/Bayesian_POLR_2010(2022_03_01).Rdata")
 
 build_lines <- function(Coeff.Summary,TSIrange) {
 
@@ -145,7 +146,7 @@ build_lines_scaled <- function(Coeff.Summary,TSIrange) {
   return(alllines)
 }
 
-lines2010 <- build_lines_scaled(Coeff.Summary.L3Eco,c(-7,7)) %>% 
+lines2010 <- build_lines_scaled(Coeff.Summary.L3Eco[1:25,],c(-7,7)) %>% 
   mutate(mod=factor("2010")) %>% 
   mutate(class=factor(class,levels=c("Oligotrophic","Mesotrophic",
                       "Eutrophic","Hypereutrophic")))
@@ -216,7 +217,7 @@ bothPlots <- ggplot()+
   labs(x="Trophic State Index",y="")
 bothPlots
 
-pdf(file="figures/ProbPlotsStacked.pdf",width=7,height=10,paper="letter",useDingbats = TRUE)
+pdf(file="figures/ProbPlotsStacked(2022_03_01).pdf",width=7,height=10,paper="letter",useDingbats = TRUE)
   grid.arrange(POLR2010,POLR2015,bothPlots)
 dev.off()
 
@@ -246,8 +247,8 @@ coastal$pMesotrophic <- tmp$pMesotrophic
 coastal$pEutrophic <- tmp$pEutrophic
 coastal$Hypertrophic <- tmp$pHypertrophic
 
-save(coastal,file="data/coastalTSI.Rdata")
-write.csv(coastal,file="outputs/coastalTSI.csv",row.names=FALSE)
+save(coastal,file="data/coastalTSI(2022_03_01).Rdata")
+write.csv(coastal,file="outputs/coastalTSI(2022_03_01).csv",row.names=FALSE)
 
 # Graph the mean and se of TSI for each Level III ecoregion
 coastal %>% group_by(levelIII) %>% summarize(meanTSI=mean(TSI),seTSI=sd(TSI)/n()^0.5) %>% 
@@ -324,7 +325,7 @@ plt <- ggplot(tmp,aes(x=wqComponent,y=alphaER,color=type)) +
         axis.ticks = element_line(size=1))
 plt
 
-pdf(file="figures/Nutrient vs Region w Case Study.pdf",
+pdf(file="figures/Nutrient vs Region w Case Study(2022_03_01).pdf",
     width=6,height=6,paper="letter",useDingbats = FALSE)
 plt
 dev.off()
@@ -411,7 +412,7 @@ dev.off()
 
 # this figure is used in the paper (Fig 3)
 nl <- theme(legend.position="none")
-pdf(file="figures/ProbPlotsStacked.wBar.withData.pdf",width=6,height=9,paper="letter",useDingbats = FALSE)
+pdf(file="figures/ProbPlotsStacked.wBar.withData(2022_03_01).pdf",width=4,height=7,paper="letter",useDingbats = FALSE)
   grid.arrange(POLR2010+nl,POLR2015+nl,jitterBarPlot+nl)
 dev.off()
   grid.arrange(POLR2010+nl,POLR2015+nl,jitterBarPlot+nl)

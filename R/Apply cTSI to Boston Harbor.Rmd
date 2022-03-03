@@ -212,6 +212,7 @@ if (!exists("bh_clarity")|!exists("bh_nutrients")) {
   load("data/bostonHarborData.Rdata")
 }
 
+load("data/BostonHarborTSI.Rdata")
 ```
 # Graph the summer Boston Harbor data
 ```{r}
@@ -268,7 +269,6 @@ summary(tmp)
 
 # Select data to process for TSI calculation
 
-Processing station 140, near Neponset River mouth (Dorchester) and station 138 (Inner Harbor/New England Aquarium)
 https://www.mwra.com/harbor/graphic/harboronly_sampling_locations.png
 
 ```{r}
@@ -445,6 +445,9 @@ save(bh_polr,file="data/Boston_POLR_Data.Rdata")
 
 load("data/Boston_POLR_Data.Rdata")
 
+ggplot(bh_polr,aes(x=TimeStamp,y=Chla))+
+  geom_point()
+
 tmp <- bh_polr %>% 
   filter(Station.ID %in% c(138,140)) %>% 
   filter(between(month(TimeStamp),6,9)) 
@@ -503,7 +506,7 @@ rm(tmp)
 
 ```{r}
 
-load("data/Bayesian_POLR_2015update.Rdata")
+load("data/Bayesian_POLR_2015update(2022_03_01).Rdata")
 load("data/Bayesian_POLR_2010.Rdata")
 load("data/centeringParameters.Rdata")
 load("data/Boston_POLR_Data.Rdata")
@@ -577,17 +580,17 @@ tmp <- calculate_ts_probabilities(Coeff.Summary.update.L3Eco,bh$TSI)
 bh$pOligotrophic <- tmp$pOligotrophic
 bh$pMesotrophic <- tmp$pMesotrophic
 bh$pEutrophic <- tmp$pEutrophic
-bh$Hypertrophic <- tmp$pHypertrophic
+bh$pHypertrophic <- tmp$pHypertrophic
 
-save(bh,file="data/BostonHarborTSI.Rdata")
-write.csv(bh,file="outputs/BH_TSI.csv",row.names=FALSE)
+save(bh,file="data/BostonHarborTSI(2022_03_01).Rdata")
+write.csv(bh,file="outputs/BH_TSI(2022_03_01).csv",row.names=FALSE)
 ```
 
 # Evaluate agreement between TSI and Chla
 
 ```{r}
 
-load("data/BostonHarborTSI.Rdata")
+load("data/BostonHarborTSI(2022_03_01).Rdata")
 
 regionEval <- build_region_matrix(bh,"levelIII")
 Pred.CatAll <- findPredictedClass.TSI(bh,Coeff.Summary.update.L3Eco)
@@ -626,7 +629,7 @@ Used quantile regression here, but later use quantile GAM instead.  Retaining ju
 
 ```{r}
 
-ggplot(bh,aes(x=year,y=TSI))+
+ggplot(bh,aes(x=TimeStamp,y=TSI))+
   geom_point()+
   geom_smooth()
 
@@ -694,7 +697,7 @@ chla_Qgam_plt <- ggplot()+
      labs(x="",y="µg L-1")
 chla_Qgam_plt  
 
-pdf(file="figures/QGAM Chla figure.pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
+pdf(file="figures/QGAM Chla figure(2022_03_01).pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
   chla_Qgam_plt +
       labs(x="",y="")+
       theme(
@@ -750,7 +753,7 @@ TSI_Qgam_plt <- ggplot()+
 
 TSI_Qgam_plt
 
-pdf(file="figures/QGAM TSI figure.pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
+pdf(file="figures/QGAM TSI figure(2022_03_01).pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
   TSI_Qgam_plt+
       labs(x="",y="")+
       theme(
