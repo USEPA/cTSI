@@ -19,23 +19,24 @@ source("functions/coastal_tsi_functions.R")
 
 ```{r}
 
-load("data/Bayesian_POLR_2015update(2022_03_01).Rdata")
-load("data/Bayesian_POLR_2010(2022_03_01).Rdata")
+load("data/Bayesian_POLR_2015update(2022_07_15).Rdata")
+load("data/Bayesian_POLR_2010(2022_07_15).Rdata")
 
-alphaOrder <- seq(c(1,16))
+alphaOrder <- seq(c(1,17))
 geographicOrder <- c(5,13,14,1,6,10,3,2,4,16,12,8,7,9,11,15)
 ecoRegionOrder <- data.frame(
-  alphaOrder=seq(1,16),
-  geographicOrder = c(5,13,14,1,6,10,3,2,4,16,12,8,7,9,11,15)
+  alphaOrder=seq(1,17),
+  #geographicOrder = c(5,13,14,1,6,10,3,2,4,16,12,8,7,9,11,15)
+  geographicOrder = c(1,8,9,10,2,6,12,14,15,7,16,13,3,4,5,11,17)
   )
 
 tmp <- rbind(
 data.frame(
-  param=rownames(Coeff.Summary.L3Eco[1:25,]),
-  mean=Coeff.Summary.L3Eco[1:25,"mean"],
-  sd=Coeff.Summary.L3Eco[1:25,"sd"],
-  l95=Coeff.Summary.L3Eco[1:25,"2.5%"],
-  u95=Coeff.Summary.L3Eco[1:25,"97.5%"]) %>%
+  param=rownames(Coeff.Summary.L3Eco[1:26,]),
+  mean=Coeff.Summary.L3Eco[1:26,"mean"],
+  sd=Coeff.Summary.L3Eco[1:26,"sd"],
+  l95=Coeff.Summary.L3Eco[1:26,"2.5%"],
+  u95=Coeff.Summary.L3Eco[1:26,"97.5%"]) %>%
   mutate(fit="Naive")
 ,
 data.frame(
@@ -54,13 +55,14 @@ rownames(tmp) <- NULL
 
 parms <- levels(tmp$param)
 #order <- c(22,23,24,3,4,1,2,5,6,seq(14,21),seq(7,13),25)
-order <- c(22,23,24,3,4,1,2,5,16,20,19,21,6,17,10,9,11,18,12,8,7,14,15,13,25)
-ecoregionNo <- c(82,58,59,64,84,63,75,65,76,73,34,6,7,1,3,2)
-lbl <- c("C1","C2","C3","TN","TP","DIN","DIP","SD",paste0(rep("ER",16),ecoregionNo),"S")
+#order <- c(22,23,24,3,4,1,2,5,16,20,19,21,6,17,10,9,11,18,12,8,7,14,15,13,25)
+order <- (c(23,24,25,3,4,1,2,5,6,13,14,15,7,11,17,19,20,12,21,18,8,9,10,16,22,26))
+ecoregionNo <- c(82,58,59,64,84,63,65,75,76,73,34,85,6,7,1,2,3)
+lbl <- c("C1","C2","C3","TN","TP","DIN","DIP","SD",paste0(rep("ER",17),ecoregionNo),"S")
 tmp$param <- factor(tmp$param,levels=parms[order],labels=lbl)
 
 # write parameter values to csv file
-write.csv(tmp,file="outputs/POLR Model Parameters(2022_03_01).csv")
+#write.csv(tmp,file="outputs/POLR Model Parameters(2022_03_01).csv")
 
 fitScale <- tmp %>% 
   filter(param=="S") %>% 
@@ -91,7 +93,7 @@ plt <- ggplot(tmp2,aes(x=param,y=mean,fill=fit))+
 plt + ggtitle("Bayesian POLR Model Parameters",
           subtitle="Update using 2015 data; Errorbars show 95% confidence interval")
 
-pdf("figures/Parameter_Comparison(2022_03_02).pdf",width=8,height = 4,paper="letter")
+pdf("figures/Parameter_Comparison(2022_07_15).pdf",width=8,height = 4,paper="letter")
    plt
 dev.off()
 
@@ -146,7 +148,7 @@ build_lines_scaled <- function(Coeff.Summary,TSIrange) {
   return(alllines)
 }
 
-lines2010 <- build_lines_scaled(Coeff.Summary.L3Eco[1:25,],c(-7,7)) %>% 
+lines2010 <- build_lines_scaled(Coeff.Summary.L3Eco[1:26,],c(-7,7)) %>% 
   mutate(mod=factor("2010")) %>% 
   mutate(class=factor(class,levels=c("Oligotrophic","Mesotrophic",
                       "Eutrophic","Hypereutrophic")))
@@ -228,7 +230,7 @@ dev.off()
 # Calculates the TSI using the final alphas (coefficients from 2015 update) for all 
 # the observations in both 2010 and 2015.
 
-load("data/Bayesian_POLR_2015update.Rdata")
+load("data/Bayesian_POLR_2015update(2022_07_15).Rdata")
 load("data/coastalTSI_NCAdata_all.Rdata")
 load("data/centeringParameters.Rdata")
 
@@ -245,10 +247,10 @@ tmp <- calculate_ts_probabilities(Coeff.Summary.update.L3Eco,coastal$TSI)
 coastal$pOligotrophic <- tmp$pOligotrophic
 coastal$pMesotrophic <- tmp$pMesotrophic
 coastal$pEutrophic <- tmp$pEutrophic
-coastal$Hypertrophic <- tmp$pHypertrophic
+coastal$pHypertrophic <- tmp$pHypertrophic
 
-save(coastal,file="data/coastalTSI(2022_03_01).Rdata")
-write.csv(coastal,file="outputs/coastalTSI(2022_03_01).csv",row.names=FALSE)
+save(coastal,file="data/coastalTSI(2022_07_15).Rdata")
+write.csv(coastal,file="outputs/coastalTSI(2022_07_15).csv",row.names=FALSE)
 
 # Graph the mean and se of TSI for each Level III ecoregion
 coastal %>% group_by(levelIII) %>% summarize(meanTSI=mean(TSI),seTSI=sd(TSI)/n()^0.5) %>% 
@@ -260,9 +262,9 @@ coastal %>% group_by(levelIII) %>% summarize(meanTSI=mean(TSI),seTSI=sd(TSI)/n()
 tmp <- coastal %>% 
   group_by(levelIII) %>% 
   summarize(meanTSI=mean(TSI),sdTSI=sd(TSI)) %>% 
-   cbind(.,Coeff.Summary.update.L3Eco[9:24,"mean"]/sigma,
-          Coeff.Summary.update.L3Eco[9:24,"2.5%"]/sigma,
-          Coeff.Summary.update.L3Eco[9:24,"97.5%"]/sigma) 
+   cbind(.,Coeff.Summary.update.L3Eco[9:25,"mean"]/sigma,
+          Coeff.Summary.update.L3Eco[9:25,"2.5%"]/sigma,
+          Coeff.Summary.update.L3Eco[9:25,"97.5%"]/sigma) 
 names(tmp)[4:6] <- c("alphaER","lcl_alphaER","ucl_alphaER")
 
 tmp <- tmp %>% mutate(wqComponent=meanTSI-alphaER,
@@ -281,16 +283,16 @@ mean(abs(tmp$alphaER))
 mean(tmp$wqComponent)
 mean(tmp$alphaER)
 
-load("data/BostonHarborTSI.Rdata")
+load("data/BostonHarborTSI(2022_07_15).Rdata")
 sigma <- Coeff.Summary.update.L3Eco["s","mean"]
 bh_avg <- bh %>% 
   #calculate standard error of mean, but the purpose is to communicate 
   #variability rather than confidence in the estimate.
   #summarize(meanTSI=mean(TSI),seTSI=sd(TSI)/n()^0.5) %>% 
   summarize(meanTSI=mean(TSI),sdTSI=sd(TSI)) %>% 
-  cbind(.,Coeff.Summary.update.L3Eco[15,"mean"]/sigma,
-          Coeff.Summary.update.L3Eco[15,"2.5%"]/sigma,
-          Coeff.Summary.update.L3Eco[15,"97.5%"]/sigma) %>% 
+  cbind(.,Coeff.Summary.update.L3Eco[16,"mean"]/sigma,
+          Coeff.Summary.update.L3Eco[16,"2.5%"]/sigma,
+          Coeff.Summary.update.L3Eco[16,"97.5%"]/sigma) %>% 
   mutate(levelIII="Boston Harbor") %>% 
   mutate(levelIII=factor(levelIII))
 names(bh_avg)[3:5] <- c("alphaER","lcl_alphaER","ucl_alphaER")
@@ -300,7 +302,7 @@ bh_avg <- bh_avg %>% mutate(wqComponent=meanTSI-alphaER,
 tmp <- rbind(tmp,bh_avg[,c(6,1,2,3,4,5,7,8)])
 
 # add a region number
-tmp <- mutate(tmp,er=as.factor(c(as.character(seq(1,16)),"BH")))
+tmp <- mutate(tmp,er=as.factor(c(as.character(seq(1,17)),"BH")))
 
 pal=brewer.pal(4,"Set2")
 
@@ -315,8 +317,8 @@ plt <- ggplot(tmp,aes(x=wqComponent,y=alphaER,color=type)) +
   geom_text(aes(label=er),nudge_y=0.25,nudge_x=0.2,size=4)+
   geom_vline(xintercept=0,linetype=2)+
   geom_hline(yintercept=0,linetype=2)+
-  scale_x_continuous(limits=c(-5,5),breaks=seq(-5,5,by=1))+
-  scale_y_continuous(limits=c(-5,5),breaks=seq(-5,5,by=1))+
+  scale_x_continuous(limits=c(-5.1,5.1),breaks=seq(-5,5,by=1))+
+  scale_y_continuous(limits=c(-5.1,5.1),breaks=seq(-5,5,by=1))+
   labs(x="Nutrient Component of TSI",y="Regional Component of TSI")+
   theme_classic()+
   theme(legend.position="top",
@@ -325,7 +327,7 @@ plt <- ggplot(tmp,aes(x=wqComponent,y=alphaER,color=type)) +
         axis.ticks = element_line(size=1))
 plt
 
-pdf(file="figures/Nutrient vs Region w Case Study(2022_03_01).pdf",
+pdf(file="figures/Nutrient vs Region w Case Study(2022_07_15).pdf",
     width=6,height=6,paper="letter",useDingbats = FALSE)
 plt
 dev.off()
@@ -380,7 +382,7 @@ tmp <- mutate(tmp,POLRclass = cut(TSI,
 tmp$probCorrect[tmp$TS_Chla_Q=="Oligo"] <- tmp$pOligotrophic[tmp$TS_Chla_Q=="Oligo"]
 tmp$probCorrect[tmp$TS_Chla_Q=="Meso"] <- tmp$pMesotrophic[tmp$TS_Chla_Q=="Meso"]
 tmp$probCorrect[tmp$TS_Chla_Q=="Eu"] <- tmp$pEutrophic[tmp$TS_Chla_Q=="Eu"]
-tmp$probCorrect[tmp$TS_Chla_Q=="Hyper"] <- tmp$pHypereutrophic[tmp$TS_Chla_Q=="Hyper"]
+tmp$probCorrect[tmp$TS_Chla_Q=="Hyper"] <- tmp$pHypertrophic[tmp$TS_Chla_Q=="Hyper"]
 
 tmp$correct <- factor(tmp$TS_Chla_Q==tmp$POLRclass,labels=c("Does not Agree","Agrees"))
 
@@ -412,7 +414,7 @@ dev.off()
 
 # this figure is used in the paper (Fig 3)
 nl <- theme(legend.position="none")
-pdf(file="figures/ProbPlotsStacked.wBar.withData(2022_03_01).pdf",width=4,height=7,paper="letter",useDingbats = FALSE)
+pdf(file="figures/ProbPlotsStacked.wBar.withData(2022_07_15).pdf",width=4,height=7,paper="letter",useDingbats = FALSE)
   grid.arrange(POLR2010+nl,POLR2015+nl,jitterBarPlot+nl)
 dev.off()
   grid.arrange(POLR2010+nl,POLR2015+nl,jitterBarPlot+nl)
