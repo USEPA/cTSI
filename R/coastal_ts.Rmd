@@ -159,10 +159,17 @@ ggplot(coastal,aes(x=DIP..mgP.L.,fill=DIP.censored))+
 ```{r eval=FALSE, include=FALSE}
 
 # Define lists of predictors
-nutrientPredictors <- c("TN..mgN.L.","DIN..mgN.L.","TP..mgP.L.","DIP..mgP.L.","DIN.DIP..Molar.","TN.TP..Molar.","SECCHI_MEAN..m.")
+nutrientPredictors <- c("TN..mgN.L.","DIN..mgN.L.","TP..mgP.L.","DIP..mgP.L.","DIN.DIP..Molar.","TN.TP..Molar.","SECCHI_MEAN..m.","DEPTH_m")
 #regionPredictors <- c("Latitude","Longitude","REGION","SUBREGIONS","levelIII","AggEco","EMAP","BioGeo")
 regionPredictors <- c("Latitude","Longitude","REGION","levelIII","AggEco","EMAP","BioGeo")
 predictors_coastal <- c(nutrientPredictors,regionPredictors)
+
+# read the depth data from raw file
+wdepth <- read.csv("raw/Depth for cTSI model_5-25-22.csv")
+names(wdepth)[1] <- "Site_Visnum_Layer"
+
+# Add the depth variable to the coastal data set
+coastal <- inner_join(coastal,select(wdepth,Site_Visnum_Layer,DEPTH_m),by="Site_Visnum_Layer")
 
 # Save the resulting data as Rdata file if the file hasn't been created already.
 if (!file.exists("data/coastalTSI_NCAdata_all.Rdata")) {
@@ -176,6 +183,10 @@ if (!file.exists("data/coastalTSI_NCAdata_all.Rdata")) {
 if(!exists("coastal")) {
 load("data/coastalTSI_NCAdata_all.Rdata")
 }
+
+# Replace Level III with the new Level III (generated 7/14/2022)
+load("data/newLevel3.Rdata")
+coastal$levelIII=newLevelIII
 
 # now reading all data at the same time, so just subsample it.
 coastal2010 <- filter(coastal,SAMPYEAR==2010)
@@ -198,7 +209,7 @@ tmp <- select(coastal,SAMPYEAR,levelIII,TS_Chla_Q) %>%
                           values_from="n",values_fill=0)
 tmp
 
-#write.csv(tmp,file="outputs/ObservationsByEcoregionTS.csv")
+write.csv(tmp,file="outputs/ObservationsByEcoregionTS_2022_07_15.csv")
 # note that there are no observations in WALLAMETTE VALLEY in 2015.
 
 ```
@@ -270,21 +281,35 @@ rf_all<-randomForest(y=all_coastal$LogCHLA,x=all_coastal[,predictors_coastal]
                      , ntree=10000, importance=TRUE, proximity=TRUE
                      , keep.forest=TRUE,keep.inbag=TRUE)
 
+rf_noSD<-randomForest(y=all_coastal$LogCHLA,x=all_coastal[,predictors_coastal[c(1:6,8:15)]]
+                     , ntree=10000, importance=TRUE, proximity=TRUE
+                     , keep.forest=TRUE,keep.inbag=TRUE)
+
+rf_polr<-randomForest(y=all_coastal$LogCHLA,x=all_coastal[,predictors_coastal[c(1:4,7,12)]]
+                     , ntree=10000, importance=TRUE, proximity=TRUE
+                     , keep.forest=TRUE,keep.inbag=TRUE)
+
+
+#rf_onlyInorganic<-randomForest(y=all_coastal$LogCHLA,x=all_coastal[,predictors_coastal[c(2,4,5:15)]]
+#                     , ntree=10000, importance=TRUE, proximity=TRUE
+#                     , keep.forest=TRUE,keep.inbag=TRUE)
+
 rf_levelIII <- randomForest(y=all_coastal$LogCHLA,x=all_coastal[,c(nutrientPredictors,"levelIII")]
                      , ntree=10000, importance=TRUE, proximity=TRUE
                      , keep.forest=TRUE,keep.inbag=TRUE)
-rf_BioGeo <- randomForest(y=all_coastal$LogCHLA,x=all_coastal[,c(nutrientPredictors,"BioGeo")]
-                     , ntree=10000, importance=TRUE, proximity=TRUE
-                     , keep.forest=TRUE,keep.inbag=TRUE)
-rf_EMAP <- randomForest(y=all_coastal$LogCHLA,x=all_coastal[,c(nutrientPredictors,"EMAP")]
-                     , ntree=10000, importance=TRUE, proximity=TRUE
-                     , keep.forest=TRUE,keep.inbag=TRUE)
-rf_AggEco <- randomForest(y=all_coastal$LogCHLA,x=all_coastal[,c(nutrientPredictors,"AggEco")]
-                     , ntree=10000, importance=TRUE, proximity=TRUE
-                     , keep.forest=TRUE,keep.inbag=TRUE)
-rf_LatLon <- randomForest(y=all_coastal$LogCHLA,x=all_coastal[,c(nutrientPredictors,"Latitude","Longitude")]
-                     , ntree=10000, importance=TRUE, proximity=TRUE
-                     , keep.forest=TRUE,keep.inbag=TRUE)
+
+#rf_BioGeo <- randomForest(y=all_coastal$LogCHLA,x=all_coastal[,c(nutrientPredictors,"BioGeo")]
+#                     , ntree=10000, importance=TRUE, proximity=TRUE
+#                     , keep.forest=TRUE,keep.inbag=TRUE)
+#rf_EMAP <- randomForest(y=all_coastal$LogCHLA,x=all_coastal[,c(nutrientPredictors,"EMAP")]
+#                     , ntree=10000, importance=TRUE, proximity=TRUE
+#                     , keep.forest=TRUE,keep.inbag=TRUE)
+#rf_AggEco <- randomForest(y=all_coastal$LogCHLA,x=all_coastal[,c(nutrientPredictors,"AggEco")]
+#                     , ntree=10000, importance=TRUE, proximity=TRUE
+#                     , keep.forest=TRUE,keep.inbag=TRUE)
+#rf_LatLon <- randomForest(y=all_coastal$LogCHLA,x=all_coastal[,c(nutrientPredictors,"Latitude","Longitude")]
+#                     , ntree=10000, importance=TRUE, proximity=TRUE
+#                     , keep.forest=TRUE,keep.inbag=TRUE)
 
 rf_allGeog <- randomForest(y=all_coastal$LogCHLA,x=all_coastal[,regionPredictors]
                      , ntree=10000, importance=TRUE, proximity=TRUE
@@ -315,6 +340,7 @@ tmp <- data.frame(observed=all_coastal$LogCHLA,predicted=rf_all$predicted)
 summary(tmp)
 
 # Plot observed vs. predicted and how SMA regression line
+# Results from this appear in section 3.2
 fit <- lmodel2(predicted ~ observed, data=tmp, nperm=99)
 plot(fit, "SMA") 
 fit
@@ -351,14 +377,23 @@ rfs <- c("data/rf_AggEco.Rdata","data/rf_all.Rdata","data/rf_allGeog.Rdata","dat
 rfs <- rfs[file.exists(rfs)]
 lapply(rfs,load,.GlobalEnv)
 
-variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Latitude","Longitude","Region","Level III","AggEco","EMAP","BioGeo")
+variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Depth","Latitude","Longitude","Region","Level III","AggEco","EMAP","BioGeo")
 plt_all_RF <- plot_vImp(rf_all,"Variable Importance - 2010, All")
+
+variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Depth","Latitude","Longitude","Region","Level III","AggEco","EMAP","BioGeo")
+plt_all_noSD <- plot_vImp(rf_noSD,"Variable Importance - 2010, no Secchi Depth")
+
+variableLabels <- c("TN","DIN","TP","DIP","Secchi","Level III")
+plt_polr <- plot_vImp(rf_polr,"Variable Importance - 2010, POLR model variables")
+
+variableLabels <- c("DIN","DIP","DIN:DIP","TN:TP","Secchi","Depth","Latitude","Longitude","Region","Level III","AggEco","EMAP","BioGeo")
+plt_all_RF <- plot_vImp(rf_onlyInorganic,"Variable Importance - 2010, No Total Nutrients")
 
 variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Subregions")
 if (!exists("rf_subregion")) {load("data/rf_subregion.Rdata")}
 plt_subregion <- plot_vImp(rf_subregion,"Variable Importance - 2010, Subregions Only")
 
-variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Level III")
+variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Depth","Level III")
 plt_levelIIIOnly <- plot_vImp(rf_levelIII,"Variable Importance - 2010, Level III Only")
 
 variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","EMAP")
@@ -370,13 +405,13 @@ plt_AggEcoOnly <- plot_vImp(rf_AggEco,"Variable Importance - 2010, AggEco Only")
 variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","BioGeo")
 plt_BioGeoOnly <- plot_vImp(rf_BioGeo,"Variable Importance - 2010, BioGeo Only")
 
-variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Latitude","Longitude")
+variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Depth","Latitude","Longitude")
 plt_LatLon <- plot_vImp(rf_LatLon,"Variable Importance - 2010, Lat/Lon Only")
 
 variableLabels <- regionPredictors
 plt_allGeog <- plot_vImp(rf_allGeog,"Variable Importance - 2010, Only Geography")
 
-pdf("figures/varImpRFall_2010.pdf",width=8,height = 10,paper="letter", onefile=TRUE)
+pdf("figures/varImpRFall_2010 (2022_07_15).pdf",width=8,height = 10,paper="letter", onefile=TRUE)
    plt_all_RF
 dev.off()
 
@@ -420,7 +455,7 @@ rm(list=c("rf_AggEco","rf_all","rf_allGeog","rf_BioGeo","rf_EMAP",
 load("data/rf_all2015.Rdata")
 
 # Create variable importance plot as column graph using ggplot
-variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Latitude","Longitude","Region","Subregions","Level III","AggEco","EMAP","BioGeo")
+variableLabels <- c("TN","DIN","TP","DIP","DIN:DIP","TN:TP","Secchi","Depth","Latitude","Longitude","Region","Level III","AggEco","EMAP","BioGeo")
 plt <- plot_vImp(rf_all2015,"Variable Importance - 2015, All")
 plt
 
@@ -535,8 +570,12 @@ coastal_jags_L3Eco <- jags.model('R/coastal_jags_2022_03_01.R',data = DataList
 proc.time() - ptm
 
 # if the graphic model object has not been saved already, then save it
-if (!file.exists("data/coastal_jags_L3Eco(2022_03_01).Rdata")) {
-  save(coastal_jags_L3Eco,file="data/coastal_jags_L3Eco(2022_03_01).Rdata")
+#if (!file.exists("data/coastal_jags_L3Eco(2022_03_01).Rdata")) {
+#  save(coastal_jags_L3Eco,file="data/coastal_jags_L3Eco(2022_03_01).Rdata")
+#}
+# if the graphic model object has not been saved already, then save it
+if (!file.exists("data/coastal_jags_L3Eco(2022_07_15).Rdata")) {
+  save(coastal_jags_L3Eco,file="data/coastal_jags_L3Eco(2022_07_15).Rdata")
 }
 
 ```
@@ -546,8 +585,12 @@ if (!file.exists("data/coastal_jags_L3Eco(2022_03_01).Rdata")) {
 ```{r echo=TRUE}
 
 #if the JAGS object does not exist, then load it from the saved file
+#if (!exists("coastal_jags_L3Eco")) {
+#  load("data/coastal_jags_L3Eco(2022_03_01).Rdata")  
+#}
+#if the JAGS object does not exist, then load it from the saved file
 if (!exists("coastal_jags_L3Eco")) {
-  load("data/coastal_jags_L3Eco(2022_03_01).Rdata")  
+  load("data/coastal_jags_L3Eco(2022_07_15).Rdata")  
 }
 
 # Sample the 2010 model with Level III ecoregions
@@ -556,8 +599,11 @@ coastal_coda_L3Eco <- sample_posterior_distribution(coastal_jags_L3Eco,parameter
 proc.time() - ptm
 
 # if sampled object has not been saved, then save it
-if (!file.exists("data/coastal_coda2010_L3Eco(2022_03_01).Rdata")) {
-  save(coastal_coda_L3Eco,file="data/coastal_coda2010_L3Eco(2022_03_01).Rdata")  
+#if (!file.exists("data/coastal_coda2010_L3Eco(2022_03_01).Rdata")) {
+#  save(coastal_coda_L3Eco,file="data/coastal_coda2010_L3Eco(2022_03_01).Rdata")  
+#}
+if (!file.exists("data/coastal_coda2010_L3Eco(2022_07_15).Rdata")) {
+  save(coastal_coda_L3Eco,file="data/coastal_coda2010_L3Eco(2022_07_15).Rdata")  
 }
 
 ```
@@ -566,8 +612,11 @@ Use level III ecoregions, create coefficient summary object
 ```{r, results="asis"}
 
 # if the sampled object does not exist, load it from stored version
+#if (!exists("coastal_coda2010_L3Eco")) {
+#  load("data/coastal_coda2010_L3Eco(2022_03_01).Rdata")  
+#}
 if (!exists("coastal_coda2010_L3Eco")) {
-  load("data/coastal_coda2010_L3Eco(2022_03_01).Rdata")  
+  load("data/coastal_coda2010_L3Eco(2022_07_15).Rdata")  
 }
 
 # Table of Parameter distribution statistics
@@ -589,22 +638,27 @@ Coeff.Summary.L3Eco <- build_coefficient_summary(CodaOne_L3Eco)
 Coeff.Summary.L3Eco <- rbind(
   Coeff.Summary.L3Eco,
   c(
-  mean(log(CodaOne_L3Eco[,25])),
-  sd(log(CodaOne_L3Eco[,25])),
-  quantile(log(CodaOne_L3Eco[,25]),probs=c(0.025)),
-  quantile(log(CodaOne_L3Eco[,25]),probs=c(0.975))
+  mean(log(CodaOne_L3Eco[,26])),
+  sd(log(CodaOne_L3Eco[,26])),
+  quantile(log(CodaOne_L3Eco[,26]),probs=c(0.025)),
+  quantile(log(CodaOne_L3Eco[,26]),probs=c(0.975))
   )
 )
-rownames(Coeff.Summary.L3Eco)[26] <- "log_s" 
+rownames(Coeff.Summary.L3Eco)[27] <- "log_s" 
 
 print(xtable(Coeff.Summary.L3Eco, floating=FALSE))
 
 # Save the coefficient summary and data if it has not been previously saved
-if (!file.exists("data/Bayesian_POLR_2010(2022_03_01).Rdata")) {
-  save(Coeff.Summary.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2010(2022_03_01).Rdata")
+#if (!file.exists("data/Bayesian_POLR_2010(2022_03_01).Rdata")) {
+#  save(Coeff.Summary.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2010(2022_03_01).Rdata")
+#}
+if (!file.exists("data/Bayesian_POLR_2010(2022_07_15).Rdata")) {
+  save(Coeff.Summary.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2010(2022_07_15).Rdata")
 }
 
-write.csv(Coeff.Summary.L3Eco,file="Coeff.Summary(2022_03_01).csv")
+#write.csv(Coeff.Summary.L3Eco,file="Coeff.Summary(2022_03_01).csv")
+write.csv(Coeff.Summary.L3Eco,file="outputs/Coeff.Summary(2022_07_15).csv")
+
 
 ```
 # Evaluate 2010 model
@@ -618,7 +672,7 @@ if (!exists("centeringParameters")) {
 }
 
 # Build Coefficient Matrix
-Alpha <- build_coefficient_matrix(Coeff.Summary.L3Eco[1:25,])
+Alpha <- build_coefficient_matrix(Coeff.Summary.L3Eco[1:26,])
 # build region matrix for Evaluation Data
 regionMatrix <- build_region_matrix(Evaluation,"levelIII")
 # calculate centered parameters, and TSI
@@ -628,7 +682,7 @@ TSI <- (X %*% Alpha[,"mean"])/Coeff.Summary.L3Eco["s","mean"]
 Evaluation$TSI <- TSI
 
 # Calculate Predicted Classes and compare with observed classes
-Pred.CatAll <- findPredictedClass.TSI(Evaluation,Coeff.Summary.L3Eco[1:25,])
+Pred.CatAll <- findPredictedClass.TSI(Evaluation,Coeff.Summary.L3Eco[1:27,])
 True.CatAll <- Evaluation[, "TS_Chla_Q"]
 CM.TS.Multilevel <- confusionMatrix(Pred.CatAll, True.CatAll)
 CM.TS.Multilevel
@@ -670,7 +724,7 @@ labelpos <- c((-400+Coeff.Summary.L3Eco["C[1]","mean"])/2,
                Coeff.Summary.L3Eco["C[3]","mean"])/2,
               (400+Coeff.Summary.L3Eco["C[3]","mean"])/2)
 
-plt <- generate_graphic_model(Model,Coeff.Summary.L3Eco[1:25,],"levelIII") +
+plt <- generate_graphic_model(Model,Coeff.Summary.L3Eco[1:26,],"levelIII") +
   scale_x_continuous(limits=c(-400,400))+
   ggtitle("Trophic State Classification - 2010 Data using Level III Ecoregions",
               subtitle="2010 Data using Uninformed Prior")+
@@ -681,18 +735,18 @@ plt <- generate_graphic_model(Model,Coeff.Summary.L3Eco[1:25,],"levelIII") +
 
 plt
 
-pdf("figures/POLR_Prob_2010L3Eco(2022_03_01).pdf", width=6, height=6, paper="letter")
+pdf("figures/POLR_Prob_2010L3Eco(2022_07_15).pdf", width=6, height=6, paper="letter")
   print(plt)
 dev.off()
 
-data.frame(s=CodaOne_L3Eco[,25]) %>% 
+data.frame(s=CodaOne_L3Eco[,26]) %>% 
   ggplot(aes(x=log(s)))+
   geom_histogram()+
   theme_classic()
 
 # Make plots showing posterior distributions from 2010.
 
-pdf("figures/Posterior_Probability_Distributions_2010_(2022_03_01).pdf", width=6, height=6, paper="letter")
+pdf("figures/Posterior_Probability_Distributions_2010_(2022_07_15).pdf", width=6, height=6, paper="letter")
 
 data.frame(CodaOne_L3Eco) %>% 
   pivot_longer(cols=everything(),names_to="Parameter",values_to = "Vals") %>% 
@@ -709,7 +763,7 @@ data.frame(CodaOne_L3Eco) %>%
 
 dev.off()
 
-pdf("figures/Posterior_S_qnorm_(2022_03_01).pdf", width=6, height=6, paper="letter")
+pdf("figures/Posterior_S_qnorm_(2022_07_15).pdf", width=6, height=6, paper="letter")
 
 qqnorm(CodaOne_L3Eco[,25])
 qqline(CodaOne_L3Eco[,25])
@@ -719,7 +773,7 @@ qqline(log(CodaOne_L3Eco[,25]))
 
 dev.off()
 
-pdf("figures/Posterior_Probability_Trace_2010_(2022_03_01).pdf", width=6, height=6, paper="letter")
+pdf("figures/Posterior_Probability_Trace_2010_(2022_07_15).pdf", width=6, height=6, paper="letter")
 data.frame(CodaOne_L3Eco) %>% 
   mutate(x=row_number()) %>% 
   pivot_longer(cols=!starts_with("x"),names_to="Parameter",values_to = "Vals") %>% 
@@ -806,17 +860,24 @@ coastal_jags_update_L3Eco <- jags.model('R/coastal_jags_update.R',data = DataLis
 proc.time() - ptm
 
 
-if (!file.exists("data/coastal_jags_update_L3Eco(2022_03_01).Rdata")) {
-  save(coastal_jags_update_L3Eco,file="data/coastal_jags_update_L3Eco(2022_03_01).Rdata")
+#if (!file.exists("data/coastal_jags_update_L3Eco(2022_03_01).Rdata")) {
+#  save(coastal_jags_update_L3Eco,file="data/coastal_jags_update_L3Eco(2022_03_01).Rdata")
+#}
+if (!file.exists("data/coastal_jags_update_L3Eco(2022_07_15).Rdata")) {
+  save(coastal_jags_update_L3Eco,file="data/coastal_jags_update_L3Eco(2022_07_15).Rdata")
 }
+
 ```
 
 #15a. Sample posterior distribution - 2015 model update using Level III ecoregions
 
 ```{r Sample2015Distribution, eval=FALSE, include=FALSE}
 
+#if (!exists("coastal_jags_update_L3Eco")) {
+#   load("data/coastal_jags_update_L3Eco(2022_03_01).Rdata")  
+#}
 if (!exists("coastal_jags_update_L3Eco")) {
-   load("data/coastal_jags_update_L3Eco(2022_03_01).Rdata")  
+   load("data/coastal_jags_update_L3Eco(2022_07_15).Rdata")  
 }
 
 
@@ -825,8 +886,9 @@ ptm <- proc.time()
 coda_update_L3Eco <- sample_posterior_distribution(coastal_jags_update_L3Eco,parameters,iterations=10000)
 proc.time() - ptm
 
-save(coda_update_L3Eco,file="data/coda_update_L3Eco(2022_03_01).Rdata")
 #save(coda_update_L3Eco,file="data/coda_update_L3Eco.Rdata")
+#save(coda_update_L3Eco,file="data/coda_update_L3Eco(2022_03_01).Rdata")
+save(coda_update_L3Eco,file="data/coda_update_L3Eco(2022_07_15).Rdata")
 
 ```
 #15a. Evaluate 2015 model update and generate parameter summary
@@ -844,7 +906,8 @@ xtable(tmp, floating=FALSE)
 # Combine Chains
 CodaOne_update_L3Eco <- combine_chains(coda_update_L3Eco,1)
 
-pdf("figures/Posterior_Probability_Distributions_2015(2022_03_01).pdf", width=6, height=6, paper="letter")
+#pdf("figures/Posterior_Probability_Distributions_2015(2022_03_01).pdf", width=6, height=6, paper="letter")
+pdf("figures/Posterior_Probability_Distributions_2015(2022_07_15).pdf", width=6, height=6, paper="letter")
 
 data.frame(CodaOne_update_L3Eco) %>% 
   pivot_longer(cols=everything(),names_to="Parameter",values_to = "Vals") %>% 
@@ -871,11 +934,16 @@ Coeff.Summary.update.L3Eco <- build_coefficient_summary(CodaOne_update_L3Eco)
 xtable(Coeff.Summary.update.L3Eco, floating=FALSE)
 
 # Save the coefficient summary and data
-if (!file.exists("data/Bayesian_POLR_2015update(2022_03_01).Rdata")) {
-  save(Coeff.Summary.update.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2015update(2022_03_01).Rdata")
+#if (!file.exists("data/Bayesian_POLR_2015update(2022_03_01).Rdata")) {
+#  save(Coeff.Summary.update.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2015update(2022_03_01).Rdata")
+#}
+# Save the coefficient summary and data
+if (!file.exists("data/Bayesian_POLR_2015update(2022_07_15).Rdata")) {
+  save(Coeff.Summary.update.L3Eco,Model,Evaluation,file="data/Bayesian_POLR_2015update(2022_07_15).Rdata")
 }
 
-write.csv(Coeff.Summary.update.L3Eco,file="Coeff.Summary.Update(2022_03_01).csv")
+#write.csv(Coeff.Summary.update.L3Eco,file="Coeff.Summary.Update(2022_03_01).csv")
+write.csv(Coeff.Summary.update.L3Eco,file="outputs/Coeff.Summary.Update(2022_07_15).csv")
 
 ```
 # Compare Parameters from uninformed (2010) and informed models (2015)

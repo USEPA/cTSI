@@ -506,8 +506,8 @@ rm(tmp)
 
 ```{r}
 
-load("data/Bayesian_POLR_2015update(2022_03_01).Rdata")
-load("data/Bayesian_POLR_2010.Rdata")
+load("data/Bayesian_POLR_2015update(2022_07_15).Rdata")
+load("data/Bayesian_POLR_2010(2022_07_15).Rdata")
 load("data/centeringParameters.Rdata")
 load("data/Boston_POLR_Data.Rdata")
 
@@ -524,7 +524,7 @@ bh <- bh_polr %>%
 #  filter(Station.ID %in% c(138,140)) %>%
   filter(between(month(TimeStamp),6,9)) %>% 
   select(Station.ID,TimeStamp,TN,TP,DIN,DIP,Secchi.Depth.m,Chla) %>% 
-  mutate(levelIII="NORTHEASTERN COASTAL ZONE") %>% 
+  mutate(levelIII="Northeastern Coastal Zone") %>% 
   mutate(levelIII=factor(levelIII,levels=levelIIIregions))  # region variable must be a factor
 
 bh <- bh[complete.cases(bh),]
@@ -582,8 +582,8 @@ bh$pMesotrophic <- tmp$pMesotrophic
 bh$pEutrophic <- tmp$pEutrophic
 bh$pHypertrophic <- tmp$pHypertrophic
 
-save(bh,file="data/BostonHarborTSI(2022_03_01).Rdata")
-write.csv(bh,file="outputs/BH_TSI(2022_03_01).csv",row.names=FALSE)
+save(bh,file="data/BostonHarborTSI(2022_07_15).Rdata")
+write.csv(bh,file="outputs/BH_TSI(2022_07_15).csv",row.names=FALSE)
 ```
 
 # Evaluate agreement between TSI and Chla
@@ -753,7 +753,7 @@ TSI_Qgam_plt <- ggplot()+
 
 TSI_Qgam_plt
 
-pdf(file="figures/QGAM TSI figure(2022_03_01).pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
+pdf(file="figures/QGAM TSI figure(2022_07_15).pdf",width=4,height=4,useDingbats = FALSE,paper="letter")
   TSI_Qgam_plt+
       labs(x="",y="")+
       theme(
