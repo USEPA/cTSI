@@ -11,9 +11,7 @@ The code includes several R markdown files and an associated file containing R f
 
 The code has been used to generate the analysis reported in
 
-Hagy, JD, B. Kreakie, M. Pelletier, F. Nojavan, J. Kiddon, and A. Oczkowski. Quantifying coastal ecosystem condition and a trophic state index with a Bayesian analytical framework
-
-The manuscript is not yet published and is not citable.
+Hagy, J. D., B. J. Kreakie, M. C. Pelletier, F. Nojavan, J. A. Kiddon and A. J. Oczkowski (2022). "Quantifying coastal ecosystem trophic state at a macroscale using a Bayesian analytical framework." Ecological Indicators 142. https://doi.org/10.1016/j.ecolind.2022.109267
 
 ## EPA Disclaimer
 
